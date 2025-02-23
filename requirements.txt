@@ -1,0 +1,16 @@
+langchain
+transformers
+torch
+chromadb
+pypdf
+python-docx
+fastapi
+uvicorn
+pydantic
+PyYAML
+accelerate
+huggingface-hub
+protobuf
+einops
+safetensors
+tokenizers
