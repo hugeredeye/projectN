@@ -5,6 +5,10 @@ from rag_pipeline import generate_analysis
 
 app = FastAPI()
 
+@app.get("/")
+async def root():
+    return {"message": "Добро пожаловать в API!"}
+
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
     text = await process_document(file)

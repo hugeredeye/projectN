@@ -14,3 +14,4 @@ protobuf
 einops
 safetensors
 tokenizers
+python-multipart
