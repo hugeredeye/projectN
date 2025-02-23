@@ -1,3 +1,4 @@
+
 langchain
 transformers
 torch
@@ -15,3 +16,4 @@ einops
 safetensors
 tokenizers
 python-multipart
+bitsandbytes

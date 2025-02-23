@@ -1,52 +1,83 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
+import logging
 
-# Используем маленькую модель для начала
-MODEL_NAME = "facebook/opt-1.3b"
+# Логирование ошибок
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-tokenizer = AutoTokenizer.from_pretrained(
-    MODEL_NAME,
-    legacy=False,
-    use_fast=True
-)
+# Используем модель поменьше для CPU
+MODEL_NAME = "facebook/opt-350m"  # Меньшая модель, подходит для CPU
 
-# Определяем устройство
-device = "cuda" if torch.cuda.is_available() else "cpu"
+try:
+    tokenizer = AutoTokenizer.from_pretrained(
+        MODEL_NAME,
+        use_fast=True
+    )
 
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_NAME,
-    torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-    device_map="auto" if device == "cuda" else None,
-    low_cpu_mem_usage=True
-)
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_NAME,
+        torch_dtype=torch.float32,  # Обычная точность для CPU
+        device_map="cpu",  # Явно указываем CPU
+        low_cpu_mem_usage=True
+    )
 
-def generate_analysis(text):
+    logger.info(f"Модель {MODEL_NAME} успешно загружена")
+
+except Exception as e:
+    logger.error(f"Ошибка загрузки модели: {str(e)}")
+    raise e
+
+
+def generate_analysis(text: str) -> str:
+    """
+    Генерация анализа документа с использованием модели deepseek-ai/Janus-Pro-7B.
+    
+    :param text: Входной текст документа
+    :return: Сгенерированный анализ
+    """
     try:
-        # Оптимизированный промпт для лучшего качества анализа
-        prompt = f"""Task: Analyze the following document.
+        if not text:
+            return "Ошибка: входной текст пуст."
+
+        # Ограничение длины текста (примерно под контекст модели)
+        max_input_length = 2048
+        if len(text) > max_input_length:
+            text = text[:max_input_length] + "..."
+
+        # Формируем промпт
+        prompt = f"""Task: Analyze the following document in detail. 
+        Provide key points, main ideas, and important conclusions.
+
 Document: {text}
+
 Analysis:"""
-        
-        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+
+        # Токенизация
+        inputs = tokenizer(prompt, return_tensors="pt")
+
+        # Генерация ответа
         outputs = model.generate(
             **inputs,
-            max_length=1024,
+            max_length=512,  # Уменьшаем длину для скорости
             temperature=0.7,
-            top_p=0.9,  # Nucleus sampling для лучшей генерации
-            do_sample=True,
-            num_return_sequences=1,
-            pad_token_id=tokenizer.eos_token_id
+            do_sample=True
         )
-        return tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        # Декодирование результата
+        result = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        return result
+
     except Exception as e:
-        print(f"Ошибка при генерации анализа: {e}")
+        logger.error(f"Ошибка генерации: {str(e)}")
         return f"Ошибка анализа: {str(e)}"
 
-# Тестирование
+
+# Тестирование модуля
 if __name__ == "__main__":
-    print(f"Используется устройство: {device}")
-    test_text = "Это тестовый документ для проверки работы модели."
-    print("Тестируем генерацию...")
+    test_text = """Это тестовый документ для проверки работы модели. 
+    Он содержит несколько предложений для анализа."""
+    print("\nТестируем генерацию...")
     result = generate_analysis(test_text)
     print("\nРезультат анализа:")
     print(result)
