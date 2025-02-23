@@ -1,19 +1,52 @@
-import pypdf
-import docx
+from typing import Dict, Any
+import io
+from docx import Document
+import PyPDF2
+from fastapi import HTTPException
 
-async def process_document(file):
-    if file.filename.endswith(".pdf"):
-        return extract_text_from_pdf(file)
-    elif file.filename.endswith(".docx"):
-        return extract_text_from_docx(file)
-    else:
-        return file.read().decode("utf-8")
+class DocumentLoader:
+    @staticmethod
+    def read_docx(file_bytes: bytes) -> str:
+        try:
+            doc = Document(io.BytesIO(file_bytes))
+            content = []
+            for para in doc.paragraphs:
+                if para.text.strip():
+                    content.append(para.text)
+            return "\n".join(content)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Ошибка чтения DOCX: {str(e)}")
 
-def extract_text_from_pdf(file):
-    reader = pypdf.PdfReader(file.file)
-    text = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
-    return text
+    @staticmethod
+    def read_pdf(file_bytes: bytes) -> str:
+        try:
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
+            content = []
+            for page in pdf_reader.pages:
+                text = page.extract_text()
+                if text.strip():
+                    content.append(text)
+            return "\n".join(content)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Ошибка чтения PDF: {str(e)}")
 
-def extract_text_from_docx(file):
-    doc = docx.Document(file.file)
-    return "\n".join([para.text for para in doc.paragraphs])
+    @staticmethod
+    def read_txt(file_bytes: bytes) -> str:
+        try:
+            return file_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                return file_bytes.decode('windows-1251')
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Ошибка чтения TXT: {str(e)}")
+
+    @classmethod
+    def load_document(cls, file_bytes: bytes, filename: str) -> str:
+        if filename.endswith('.docx'):
+            return cls.read_docx(file_bytes)
+        elif filename.endswith('.pdf'):
+            return cls.read_pdf(file_bytes)
+        elif filename.endswith('.txt'):
+            return cls.read_txt(file_bytes)
+        else:
+            raise HTTPException(status_code=400, detail="Неподдерживаемый формат файла")

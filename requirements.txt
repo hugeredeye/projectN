@@ -1,9 +1,8 @@
-
 langchain
 transformers
 torch
 chromadb
-pypdf
+pypdf2
 python-docx
 fastapi
 uvicorn
@@ -16,4 +15,3 @@ einops
 safetensors
 tokenizers
 python-multipart
-bitsandbytes
