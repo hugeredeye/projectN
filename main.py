@@ -9,7 +9,7 @@ from utils import format_analysis_response, validate_document_size
 from config import settings
 from rag_pipeline import generate_analysis, explain_point
 
-app = FastAPI(title="Document Analysis API")
+app = FastAPI(title="Анализ документов")
 
 # Создаем папку для загруженных файлов, если её нет
 UPLOAD_DIR = "uploads"
@@ -42,7 +42,7 @@ async def root():
         return f.read()
 
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile):
     try:
         # Сохраняем файл
         file_path = os.path.join(UPLOAD_DIR, file.filename)
@@ -51,38 +51,52 @@ async def upload_file(file: UploadFile = File(...)):
             buffer.write(content)
         
         return JSONResponse({
+            "status": "success",
             "filename": file.filename,
-            "status": "success"
+            "message": "Файл успешно загружен"
         })
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"Ошибка при загрузке файла: {str(e)}")  # Для отладки
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=400)
 
 @app.post("/compare")
 async def compare_documents(
-    tz_file: UploadFile = File(...),
-    project_file: UploadFile = File(...)
+    tz_file: UploadFile = File(None),
+    project_file: UploadFile = File(None)
 ):
     try:
-        # Сохраняем оба файла
-        tz_path = os.path.join(UPLOAD_DIR, tz_file.filename)
-        project_path = os.path.join(UPLOAD_DIR, project_file.filename)
-        
-        with open(tz_path, "wb") as buffer:
-            content = await tz_file.read()
-            buffer.write(content)
-            
-        with open(project_path, "wb") as buffer:
-            content = await project_file.read()
-            buffer.write(content)
-
-        return JSONResponse({
-            "tz_file": tz_file.filename,
-            "project_file": project_file.filename,
+        response = {
             "status": "success",
-            "message": "Файлы успешно загружены и готовы к сравнению"
-        })
+            "files": [],
+            "message": "Файлы получены"
+        }
+
+        # Проверяем и сохраняем ТЗ
+        if tz_file:
+            tz_path = os.path.join(UPLOAD_DIR, tz_file.filename)
+            with open(tz_path, "wb") as buffer:
+                content = await tz_file.read()
+                buffer.write(content)
+            response["files"].append(tz_file.filename)
+
+        # Проверяем и сохраняем проектную документацию
+        if project_file:
+            project_path = os.path.join(UPLOAD_DIR, project_file.filename)
+            with open(project_path, "wb") as buffer:
+                content = await project_file.read()
+                buffer.write(content)
+            response["files"].append(project_file.filename)
+
+        return JSONResponse(response)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"Ошибка при сравнении: {str(e)}")  # Для отладки
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        }, status_code=400)
 
 @app.post("/explain")
 async def explain_document_point(point: str):
