@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Загрузка ТЗ и документации</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="upload-card">
+            <h1>Загрузка ТЗ и документации</h1>
+            
+            <button class="upload-button" onclick="document.getElementById('tz-input').click()">
+                добавить ТЗ
+            </button>
+            <input type="file" id="tz-input" hidden accept=".docx,.pdf,.txt">
+            
+            <button class="upload-button" onclick="document.getElementById('doc-input').click()">
+                добавить документацию
+            </button>
+            <input type="file" id="doc-input" hidden accept=".docx,.pdf,.txt">
+            
+            <div class="uploaded-files" id="uploaded-files">
+                <p>загружены файлы:</p>
+                <div id="file-list"></div>
+            </div>
+            
+            <button class="compare-button" onclick="compareDocuments()">
+                Сравнение →
+            </button>
+        </div>
+    </div>
+    <script src="/static/js/script.js"></script>
+</body>
+</html>
