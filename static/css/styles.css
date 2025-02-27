@@ -5,7 +5,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: #E5C1CD;
+    background-color: #E7C7D3;
     font-family: Arial, sans-serif;
 }
 
@@ -18,29 +18,32 @@ body {
 
 .upload-card {
     background: white;
-    border-radius: 20px;
+    border-radius: 24px;
     padding: 40px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    text-align: center;
 }
 
 h1 {
     font-size: 24px;
-    margin: 0 0 30px 0;
+    margin: 0 0 40px 0;
     text-align: center;
-    font-weight: normal;
+    font-weight: 500;
+    color: #000000;
 }
 
 .upload-button {
     width: 100%;
-    padding: 15px;
-    margin-bottom: 15px;
+    padding: 16px;
+    margin-bottom: 16px;
     border: none;
-    border-radius: 25px;
-    background-color: #E5C1CD;
+    border-radius: 16px;
+    background-color: #E7C7D3;
     color: white;
     font-size: 16px;
     cursor: pointer;
-    transition: background-color 0.3s;
+    transition: background-color 0.2s;
+    font-weight: 500;
 }
 
 .upload-button:last-of-type {
@@ -49,38 +52,53 @@ h1 {
 
 .upload-button:hover {
     background-color: #D1A5B1;
+    transform: translateY(-1px);
 }
 
 .uploaded-files {
-    margin-top: 20px;
-    color: #666;
-    font-size: 14px;
+    margin-top: 30px;
+    text-align: left;
 }
 
 .uploaded-files p {
     margin: 0 0 10px 0;
+    color: #666666;
+    font-size: 14px;
 }
 
 #file-list {
-    color: #666;
+    color: #666666;
+    font-size: 14px;
+    line-height: 1.5;
 }
 
 .compare-button {
     position: absolute;
-    bottom: -60px;
-    right: 20px;
-    padding: 15px 30px;
+    bottom: 40px;
+    right: 40px;
+    padding: 16px 24px;
     border: none;
-    border-radius: 25px;
-    background-color: #E5C1CD;
+    border-radius: 16px;
+    background-color: #E7C7D3;
     color: white;
     font-size: 16px;
+    font-weight: 500;
     cursor: pointer;
-    transition: background-color 0.3s;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .compare-button:hover {
     background-color: #D1A5B1;
+    transform: translateY(-1px);
+}
+
+.compare-button::after {
+    content: "→";
+    font-size: 20px;
+    line-height: 1;
 }
 
 .result-card {
@@ -143,4 +161,20 @@ h1 {
 
 .recommendation {
     color: #007bff;
+}
+
+.progress-text {
+    margin-top: 20px;
+    color: #666;
+    font-size: 14px;
+}
+
+.download-button:disabled,
+.view-errors-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+[disabled] {
+    pointer-events: none;
 }
