@@ -17,10 +17,10 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
     ALLOWED_EXTENSIONS: List[str] = [".pdf", ".docx", ".txt"]
     
-    # Настройки модели
-    MODEL_NAME: str = "microsoft/phi-2"
-    DEVICE: str = "cuda" if os.environ.get("USE_GPU", "0") == "1" else "cpu"
-    MAX_LENGTH: int = 2048
+    # Настройки LLM
+    GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
+    MODEL_NAME: str = "deepseek-r1-distill-llama-70b"  # DeepSeek через Groq
+    MAX_TOKENS: int = 32768  # Максимальная длина контекста
     TEMPERATURE: float = 0.7
     
     # Настройки базы данных векторов

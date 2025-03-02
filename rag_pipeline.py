@@ -3,9 +3,7 @@ from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
-from langchain_community.llms import HuggingFacePipeline
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
-import torch
+from langchain_groq import ChatGroq
 from typing import Dict, List
 import os
 import logging
@@ -18,7 +16,6 @@ logger = logging.getLogger(__name__)
 class RAGPipeline:
     def __init__(self):
         self.model_name = settings.MODEL_NAME
-        self.device = settings.DEVICE
         self.initialize_model()
         self.initialize_embeddings()
         
@@ -26,33 +23,18 @@ class RAGPipeline:
         os.makedirs(settings.VECTOR_DB_PATH, exist_ok=True)
 
     def initialize_model(self):
-        """Инициализация языковой модели"""
+        """Инициализация DeepSeek через Groq API"""
         try:
-            logger.info(f"Загрузка модели {self.model_name}...")
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                trust_remote_code=True
-            )
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                device_map="auto",
-                trust_remote_code=True
-            )
-
-            # Создаем пайплайн для генерации текста
-            text_generation = pipeline(
-                "text-generation",
-                model=self.model,
-                tokenizer=self.tokenizer,
-                max_length=settings.MAX_LENGTH,
+            logger.info(f"Инициализация модели {self.model_name} через Groq...")
+            
+            self.llm = ChatGroq(
+                groq_api_key=settings.GROQ_API_KEY,
+                model_name=settings.MODEL_NAME,
                 temperature=settings.TEMPERATURE,
-                top_p=0.95,
-                repetition_penalty=1.15
+                max_tokens=settings.MAX_TOKENS
             )
-
-            self.llm = HuggingFacePipeline(pipeline=text_generation)
-            logger.info("Модель успешно загружена!")
+            
+            logger.info("Модель DeepSeek успешно инициализирована!")
         except Exception as e:
             logger.error(f"Ошибка при инициализации модели: {str(e)}")
             raise
@@ -61,8 +43,7 @@ class RAGPipeline:
         """Инициализация эмбеддингов"""
         try:
             self.embeddings = HuggingFaceEmbeddings(
-                model_name="sentence-transformers/all-MiniLM-L6-v2",
-                model_kwargs={'device': self.device}
+                model_name="sentence-transformers/all-MiniLM-L6-v2"
             )
             logger.info("Эмбеддинги успешно инициализированы")
         except Exception as e:
@@ -115,22 +96,26 @@ class RAGPipeline:
 
             # Создаем промпт для анализа
             analysis_prompt = PromptTemplate(
-                template="""
-                Проанализируйте следующее требование из технического задания:
+                template="""You are an expert in analyzing technical documentation. Your task is to compare the requirement from the technical specification with the implementation in the project documentation.
+
+                ## Requirement from Technical Specification:
                 {requirement}
 
-                Контекст из ТЗ:
+                ## Relevant fragments from Technical Specification:
                 {tz_context}
 
-                Контекст из документации:
+                ## Found fragments in project documentation:
                 {doc_context}
 
-                Определите:
-                1. Соответствует ли реализация требованию (полностью/частично/не соответствует)
-                2. Какие конкретно несоответствия или проблемы обнаружены
-                3. Что нужно исправить
+                Conduct a detailed analysis and provide a structured response on the following points:
 
-                Ответ должен быть структурированным и конкретным.
+                1. **Compliance Status**: (fully compliant / partially compliant / non-compliant)
+                2. **Identified Discrepancies**: (describe each discrepancy in detail)
+                3. **Criticality Level**: (critical / major / minor) for each discrepancy
+                4. **Required Corrections**: (specific recommendations)
+                5. **Assessment Justification**: (why you gave this assessment)
+
+                Important: The analysis should be objective, accurate, and based strictly on the provided document fragments.
                 """,
                 input_variables=["requirement", "tz_context", "doc_context"]
             )
@@ -159,7 +144,7 @@ class RAGPipeline:
                 doc_context = doc_qa.run(requirement)
 
                 # Анализируем требование
-                analysis = self.llm(
+                analysis = self.llm.predict(
                     analysis_prompt.format(
                         requirement=requirement,
                         tz_context=tz_context,
@@ -183,39 +168,53 @@ class RAGPipeline:
             logger.error(f"Ошибка при анализе документов: {str(e)}")
             raise
 
-    def _determine_status(self, analysis: str) -> str:
-        """Определение статуса соответствия на основе анализа"""
+    def _determine_status(self, analysis: str) -> dict:
+        """Определение статуса соответствия и критичности несоответствий"""
         analysis_lower = analysis.lower()
-        if "полностью соответствует" in analysis_lower:
-            return "full_match"
-        elif "частично соответствует" in analysis_lower:
-            return "partial_match"
-        else:
-            return "no_match"
-
-def explain_point(point: str) -> str:
-    """Объяснение конкретного пункта"""
-    try:
-        explanation_prompt = PromptTemplate(
-            template="""
-            Объясните следующий пункт технического задания простыми словами:
-            {point}
-
-            Объяснение должно быть:
-            1. Понятным для неспециалиста
-            2. Структурированным
-            3. С конкретными примерами, где это возможно
-            """,
-            input_variables=["point"]
-        )
-
-        rag_pipeline = RAGPipeline()
-        explanation = rag_pipeline.llm(explanation_prompt.format(point=point))
-        return explanation
-
-    except Exception as e:
-        logger.error(f"Ошибка при объяснении пункта: {str(e)}")
-        raise
+        
+        # Базовый результат
+        result = {
+            "status": "unknown",
+            "criticality": "unknown",
+            "details": {}
+        }
+        
+        # Определение статуса соответствия
+        if "fully compliant" in analysis_lower:
+            result["status"] = "full_match"
+        elif "partially compliant" in analysis_lower:
+            result["status"] = "partial_match"
+        elif "non-compliant" in analysis_lower:
+            result["status"] = "no_match"
+        
+        # Определение уровня критичности
+        if "critical" in analysis_lower:
+            result["criticality"] = "critical"
+        elif "major" in analysis_lower:
+            result["criticality"] = "major"
+        elif "minor" in analysis_lower:
+            result["criticality"] = "minor"
+        
+        # Если нет несоответствий, устанавливаем критичность "none"
+        if result["status"] == "full_match":
+            result["criticality"] = "none"
+        
+        # Добавляем детали анализа
+        try:
+            # Извлекаем несоответствия
+            if "identified discrepancies" in analysis_lower:
+                inconsistencies_text = analysis.split("Identified Discrepancies")[1].split("Criticality Level")[0]
+                result["details"]["inconsistencies"] = inconsistencies_text.strip()
+            
+            # Извлекаем необходимые исправления
+            if "required corrections" in analysis_lower:
+                fixes_text = analysis.split("Required Corrections")[1].split("Assessment Justification")[0]
+                result["details"]["fixes"] = fixes_text.strip()
+        except:
+            # В случае ошибки парсинга, возвращаем только базовый результат
+            pass
+            
+        return result
 
 # Создаем глобальный экземпляр RAGPipeline
 rag_pipeline = RAGPipeline()
@@ -233,4 +232,27 @@ def generate_analysis(tz_content: Dict, doc_content: Dict) -> List[Dict]:
 
     except Exception as e:
         logger.error(f"Ошибка при генерации анализа: {str(e)}")
+        raise
+
+def explain_point(point: str) -> str:
+    """Объяснение конкретного пункта"""
+    try:
+        explanation_prompt = """You are an expert helping to understand technical requirements. Explain the following point from the technical specification:
+
+        {point}
+
+        Provide a detailed explanation that should be:
+        1. Understandable for a person without technical education
+        2. Well-structured using headings and lists
+        3. With specific practical examples
+        4. With an explanation of why this point is important for the project
+
+        Avoid professional jargon. If you use technical terms, explain their meaning.
+        """
+
+        explanation = rag_pipeline.llm.predict(explanation_prompt.format(point=point))
+        return explanation
+
+    except Exception as e:
+        logger.error(f"Ошибка при объяснении пункта: {str(e)}")
         raise

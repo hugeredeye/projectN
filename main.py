@@ -1,14 +1,21 @@
+import os
+import time
+import logging
+from dotenv import load_dotenv
+
+# Загрузка переменных окружения из .env файла
+load_dotenv()
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-import os
 from typing import List
 from document_loader import DocumentLoader
 from utils import format_analysis_response, validate_document_size
 from config import settings
 from rag_pipeline import generate_analysis, explain_point
-from database import db, get_db, UploadedFile, ComparisonSession, db_manager
+from database import get_db, UploadedFile, ComparisonSession, db_manager, AsyncSessionLocal
 from sqlalchemy import select
 import uuid
 import json
@@ -18,6 +25,10 @@ import hashlib
 from datetime import datetime
 from tasks import cleanup_task, calculate_storage_stats
 import asyncio
+
+# Настраиваем логгер
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="Анализ документов")
 
@@ -109,7 +120,7 @@ async def upload_file(
             file_type=file.content_type,
             file_size=len(content),
             md5_hash=md5_hash,
-            metadata={
+            file_metadata={
                 "upload_ip": "user_ip",  # Можно добавить реальный IP
                 "mime_type": file.content_type,
                 "extension": file_ext
@@ -252,6 +263,61 @@ async def delete_file(
         await db.rollback()
         logger.error(f"Ошибка при удалении файла: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime):
+    """Фоновая задача для обработки документов"""
+    async with AsyncSessionLocal() as db:
+        try:
+            # Получаем файлы
+            tz_query = select(UploadedFile).where(UploadedFile.id == tz_file_id)
+            doc_query = select(UploadedFile).where(UploadedFile.id == doc_file_id)
+            
+            tz_result = await db.execute(tz_query)
+            doc_result = await db.execute(doc_query)
+            
+            tz_file = tz_result.scalar_one_or_none()
+            doc_file = doc_result.scalar_one_or_none()
+            
+            if not tz_file or not doc_file:
+                raise Exception("Файлы не найдены")
+            
+            # Пути к файлам
+            tz_path = os.path.join(UPLOAD_DIR, tz_file.stored_name)
+            doc_path = os.path.join(UPLOAD_DIR, doc_file.stored_name)
+            
+            # Выполняем анализ
+            analysis_result = generate_analysis(tz_path, doc_path)
+            
+            # Обновляем результат в БД
+            query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
+            result = await db.execute(query)
+            session = result.scalar_one_or_none()
+            
+            if session:
+                end_time = datetime.utcnow()
+                processing_time = int((end_time - start_time).total_seconds())
+                
+                session.status = "completed"
+                session.completed_at = end_time
+                session.processing_time = processing_time
+                session.result = analysis_result
+                
+                await db.commit()
+            
+            logger.info(f"Анализ документов завершен: {session_id}")
+            
+        except Exception as e:
+            logger.error(f"Ошибка при анализе документов: {str(e)}")
+            
+            # Обновляем статус в случае ошибки
+            query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
+            result = await db.execute(query)
+            session = result.scalar_one_or_none()
+            
+            if session:
+                session.status = "error"
+                session.error_message = str(e)
+                await db.commit()
 
 if __name__ == "__main__":
     import uvicorn

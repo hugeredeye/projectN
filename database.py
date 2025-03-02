@@ -5,7 +5,8 @@ from sqlalchemy import (Column, Integer, String, DateTime, ForeignKey, Text,
 from datetime import datetime, timedelta
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/document_analyzer")
+# Заменяем на PostgreSQL
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost/document_analyzer")
 
 engine = create_async_engine(DATABASE_URL, echo=True)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -25,7 +26,7 @@ class UploadedFile(Base):
     md5_hash = Column(String(32), nullable=True)  # Для проверки дубликатов
     is_deleted = Column(Boolean, default=False)    # Soft delete
     delete_date = Column(DateTime, nullable=True)
-    metadata = Column(JSON, nullable=True)         # Дополнительные метаданные
+    file_metadata = Column(JSON, nullable=True)         # Дополнительные метаданные
 
     # Отношения
     comparison_sessions_tz = relationship("ComparisonSession", foreign_keys="ComparisonSession.tz_file_id", back_populates="tz_file")
@@ -75,11 +76,11 @@ class DatabaseManager:
         async with AsyncSessionLocal() as session:
             cutoff_date = datetime.utcnow() - timedelta(days=days)
             
-            # Помечаем старые файлы как удаленные
-            query = text("""
+            # Помечаем старые файлы как удаленные (для PostgreSQL)
+            query = """
                 UPDATE uploaded_files
                 SET is_deleted = true,
-                    delete_date = NOW()
+                    delete_date = :now
                 WHERE upload_date < :cutoff_date
                 AND is_deleted = false
                 AND id NOT IN (
@@ -89,38 +90,56 @@ class DatabaseManager:
                     SELECT doc_file_id FROM comparison_sessions
                     WHERE created_at >= :cutoff_date
                 )
-            """)
-            await session.execute(query, {"cutoff_date": cutoff_date})
+            """
+            await session.execute(text(query), {
+                "cutoff_date": cutoff_date, 
+                "now": datetime.utcnow()
+            })
             await session.commit()
 
     async def get_storage_stats(self):
         """Получение статистики хранилища"""
         async with AsyncSessionLocal() as session:
-            query = text("""
+            # Запрос для PostgreSQL
+            query = """
                 SELECT 
                     COUNT(*) as total_files,
-                    SUM(file_size) as total_size,
-                    AVG(file_size) as avg_size,
+                    COALESCE(SUM(file_size), 0) as total_size,
+                    COALESCE(AVG(file_size), 0) as avg_size,
                     COUNT(CASE WHEN is_deleted = true THEN 1 END) as deleted_files,
                     COUNT(CASE WHEN status = 'processing' THEN 1 END) as processing_files
                 FROM uploaded_files
-            """)
-            result = await session.execute(query)
-            return dict(result.fetchone())
+            """
+            result = await session.execute(text(query))
+            row = result.fetchone()
+            return {
+                "total_files": row[0],
+                "total_size": row[1],
+                "avg_size": row[2],
+                "deleted_files": row[3],
+                "processing_files": row[4]
+            }
 
     async def get_comparison_stats(self):
         """Получение статистики сравнений"""
         async with AsyncSessionLocal() as session:
-            query = text("""
+            # Запрос для PostgreSQL 
+            query = """
                 SELECT 
                     COUNT(*) as total_comparisons,
-                    AVG(processing_time) as avg_processing_time,
+                    COALESCE(AVG(processing_time), 0) as avg_processing_time,
                     COUNT(CASE WHEN status = 'completed' THEN 1 END) as successful_comparisons,
                     COUNT(CASE WHEN status = 'error' THEN 1 END) as failed_comparisons
                 FROM comparison_sessions
-            """)
-            result = await session.execute(query)
-            return dict(result.fetchone())
+            """
+            result = await session.execute(text(query))
+            row = result.fetchone()
+            return {
+                "total_comparisons": row[0],
+                "avg_processing_time": row[1],
+                "successful_comparisons": row[2],
+                "failed_comparisons": row[3]
+            }
 
 # Dependency для FastAPI
 async def get_db():
