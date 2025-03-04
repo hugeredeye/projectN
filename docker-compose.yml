@@ -26,5 +26,17 @@ services:
     depends_on:
       - db
 
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      - ./vector_db:/app/vector_db
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    restart: unless-stopped
+
 volumes:
   postgres_data: 
