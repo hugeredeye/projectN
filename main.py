@@ -321,4 +321,4 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

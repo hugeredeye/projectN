@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import os
 
 # Заменяем на PostgreSQL
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost/document_analyzer")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@db:5432/document_analyzer")
 
 engine = create_async_engine(DATABASE_URL, echo=True)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -16,16 +16,16 @@ Base = declarative_base()
 class UploadedFile(Base):
     __tablename__ = "uploaded_files"
 
-    id = Column(Integer, primary_key=True)
-    original_name = Column(String(255), nullable=False)
-    stored_name = Column(String(255), nullable=False, unique=True)
-    file_type = Column(String(50), nullable=False)
-    upload_date = Column(DateTime, default=datetime.utcnow, nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
+    original_name = Column(String, nullable=False)
+    stored_name = Column(String, nullable=False)
+    file_type = Column(String, nullable=False)
     file_size = Column(Integer, nullable=False)
-    status = Column(String(50), default='uploaded')
-    md5_hash = Column(String(32), nullable=True)  # Для проверки дубликатов
-    is_deleted = Column(Boolean, default=False)    # Soft delete
+    md5_hash = Column(String, nullable=False)
+    is_deleted = Column(Boolean, default=False)
     delete_date = Column(DateTime, nullable=True)
+    upload_date = Column(DateTime, nullable=False)
+    status = Column(String(50), default='uploaded')
     file_metadata = Column(JSON, nullable=True)         # Дополнительные метаданные
 
     # Отношения

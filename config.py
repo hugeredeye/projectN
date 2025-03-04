@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
     ALLOWED_EXTENSIONS: List[str] = [".pdf", ".docx", ".txt"]
     
+    # Настройки базы данных
+    DATABASE_URL: str = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./document_analyzer.db")
     # Настройки LLM
     GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
     MODEL_NAME: str = "deepseek-r1-distill-llama-70b"  # DeepSeek через Groq

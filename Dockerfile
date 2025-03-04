@@ -4,10 +4,17 @@ FROM python:3.11-slim
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Устанавливаем системные зависимости
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    python3-dev \
+# Настройка репозиториев и установка пакетов
+RUN echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries \
+    && echo "deb http://mirror.yandex.ru/debian/ bookworm main" > /etc/apt/sources.list \
+    && echo "deb http://mirror.yandex.ru/debian-security/ bookworm-security main" >> /etc/apt/sources.list \
+    && echo "deb http://mirror.yandex.ru/debian/ bookworm-updates main" >> /etc/apt/sources.list \
+    && apt-get update \
+    && apt-get install -y \
+        build-essential \
+        python3-dev \
+        libpq-dev \
+        postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Копируем файлы зависимостей
@@ -30,4 +37,4 @@ ENV PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8000
 
 # Запускаем приложение
-CMD ["python", "main.py"] 
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 
