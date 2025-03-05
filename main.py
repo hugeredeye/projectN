@@ -15,7 +15,7 @@ from document_loader import DocumentLoader
 from utils import format_analysis_response, validate_document_size
 from config import settings
 from rag_pipeline import generate_analysis, explain_point
-from database import get_db, UploadedFile, ComparisonSession, db_manager, AsyncSessionLocal
+from database import get_db, UploadedFile, ComparisonSession, db_manager, AsyncSessionLocal, create_tables, engine
 from sqlalchemy import select
 import uuid
 import json
@@ -65,6 +65,10 @@ async def root():
 # Запуск фоновых задач
 @app.on_event("startup")
 async def startup_event():
+    # Создаем таблицы в базе данных
+    await create_tables(engine)
+
+    # Запускаем фоновые задачи
     asyncio.create_task(cleanup_task())
     asyncio.create_task(calculate_storage_stats())
 
@@ -99,7 +103,7 @@ async def upload_file(
         md5_hash = await calculate_md5(file_path)
 
         # Проверяем на дубликаты
-        query = select(UploadedFile).where(UploadedFile.md5_hash == md5_hash, 
+        query = select(UploadedFile).where(UploadedFile.md5_hash == md5_hash,
                                          UploadedFile.is_deleted == False)
         result = await db.execute(query)
         existing_file = result.scalar_one_or_none()
@@ -230,7 +234,7 @@ async def get_stats():
     try:
         storage_stats = await db_manager.get_storage_stats()
         comparison_stats = await db_manager.get_comparison_stats()
-        
+
         return {
             "storage": storage_stats,
             "comparisons": comparison_stats
@@ -271,49 +275,49 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
             # Получаем файлы
             tz_query = select(UploadedFile).where(UploadedFile.id == tz_file_id)
             doc_query = select(UploadedFile).where(UploadedFile.id == doc_file_id)
-            
+
             tz_result = await db.execute(tz_query)
             doc_result = await db.execute(doc_query)
-            
+
             tz_file = tz_result.scalar_one_or_none()
             doc_file = doc_result.scalar_one_or_none()
-            
+
             if not tz_file or not doc_file:
                 raise Exception("Файлы не найдены")
-            
+
             # Пути к файлам
             tz_path = os.path.join(UPLOAD_DIR, tz_file.stored_name)
             doc_path = os.path.join(UPLOAD_DIR, doc_file.stored_name)
-            
+
             # Выполняем анализ
             analysis_result = generate_analysis(tz_path, doc_path)
-            
+
             # Обновляем результат в БД
             query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
             result = await db.execute(query)
             session = result.scalar_one_or_none()
-            
+
             if session:
                 end_time = datetime.utcnow()
                 processing_time = int((end_time - start_time).total_seconds())
-                
+
                 session.status = "completed"
                 session.completed_at = end_time
                 session.processing_time = processing_time
                 session.result = analysis_result
-                
+
                 await db.commit()
-            
+
             logger.info(f"Анализ документов завершен: {session_id}")
-            
+
         except Exception as e:
             logger.error(f"Ошибка при анализе документов: {str(e)}")
-            
+
             # Обновляем статус в случае ошибки
             query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
             result = await db.execute(query)
             session = result.scalar_one_or_none()
-            
+
             if session:
                 session.status = "error"
                 session.error_message = str(e)
