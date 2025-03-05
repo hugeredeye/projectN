@@ -1,3 +1,4 @@
+/* Основные стили для body */
 body {
     margin: 0;
     padding: 0;
@@ -9,6 +10,7 @@ body {
     font-family: Arial, sans-serif;
 }
 
+/* Контейнер для основного контента */
 .container {
     width: 100%;
     max-width: 500px;
@@ -16,6 +18,7 @@ body {
     position: relative;
 }
 
+/* Карточка для загрузки файлов */
 .upload-card {
     background: white;
     border-radius: 24px;
@@ -24,6 +27,7 @@ body {
     text-align: center;
 }
 
+/* Заголовок */
 h1 {
     font-size: 24px;
     margin: 0 0 40px 0;
@@ -32,6 +36,7 @@ h1 {
     color: #000000;
 }
 
+/* Кнопки загрузки */
 .upload-button {
     width: 100%;
     padding: 16px;
@@ -42,7 +47,7 @@ h1 {
     color: white;
     font-size: 16px;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: background-color 0.2s, transform 0.2s;
     font-weight: 500;
 }
 
@@ -52,9 +57,14 @@ h1 {
 
 .upload-button:hover {
     background-color: #D1A5B1;
-    transform: translateY(-1px);
+    transform: translateY(-2px);
 }
 
+.upload-button:active {
+    transform: translateY(0);
+}
+
+/* Секция загруженных файлов */
 .uploaded-files {
     margin-top: 30px;
     text-align: left;
@@ -72,6 +82,7 @@ h1 {
     line-height: 1.5;
 }
 
+/* Кнопка сравнения */
 .compare-button {
     position: absolute;
     bottom: 40px;
@@ -92,7 +103,11 @@ h1 {
 
 .compare-button:hover {
     background-color: #D1A5B1;
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+}
+
+.compare-button:active {
+    transform: translateY(0);
 }
 
 .compare-button::after {
@@ -101,6 +116,7 @@ h1 {
     line-height: 1;
 }
 
+/* Карточка с результатами */
 .result-card {
     background: white;
     border-radius: 20px;
@@ -109,6 +125,7 @@ h1 {
     margin-bottom: 20px;
 }
 
+/* Секции с результатами */
 .result-section {
     margin-bottom: 30px;
 }
@@ -132,6 +149,7 @@ h1 {
     line-height: 1.5;
 }
 
+/* Кнопка "Назад" */
 .back-button {
     position: absolute;
     bottom: -60px;
@@ -143,32 +161,53 @@ h1 {
     color: white;
     font-size: 16px;
     cursor: pointer;
-    transition: background-color 0.3s;
+    transition: background-color 0.3s, transform 0.2s;
 }
 
 .back-button:hover {
     background-color: #D1A5B1;
+    transform: translateY(-2px);
+}
+
+.back-button:active {
+    transform: translateY(0);
 }
 
 /* Стили для разных типов пунктов */
 .match {
     color: #28a745;
+    background-color: #e8f5e9;
+    padding: 8px;
+    border-radius: 8px;
 }
 
 .discrepancy {
     color: #dc3545;
+    background-color: #f8d7da;
+    padding: 8px;
+    border-radius: 8px;
 }
 
 .recommendation {
     color: #007bff;
+    background-color: #e3f2fd;
+    padding: 8px;
+    border-radius: 8px;
 }
 
+/* Текст прогресса */
 .progress-text {
     margin-top: 20px;
     color: #666;
     font-size: 14px;
+    transition: opacity 0.3s;
 }
 
+.progress-text.loading {
+    opacity: 0.7;
+}
+
+/* Отключенные кнопки */
 .download-button:disabled,
 .view-errors-button:disabled {
     opacity: 0.6;
@@ -177,4 +216,31 @@ h1 {
 
 [disabled] {
     pointer-events: none;
+}
+
+/* Адаптивность */
+@media (max-width: 600px) {
+    .container {
+        padding: 10px;
+    }
+
+    .upload-card {
+        padding: 20px;
+    }
+
+    h1 {
+        font-size: 20px;
+    }
+
+    .upload-button {
+        padding: 12px;
+        font-size: 14px;
+    }
+
+    .compare-button {
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        font-size: 14px;
+    }
 }

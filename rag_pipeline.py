@@ -4,7 +4,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain_groq import ChatGroq
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 import os
 import logging
 from config import settings
@@ -13,34 +13,36 @@ from config import settings
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class RAGPipeline:
     def __init__(self):
+        """Инициализация RAGPipeline."""
         self.model_name = settings.MODEL_NAME
         self.initialize_model()
         self.initialize_embeddings()
-        
-        # Создаем директорию для векторной БД если её нет
+
+        # Создаем директорию для векторной БД, если её нет
         os.makedirs(settings.VECTOR_DB_PATH, exist_ok=True)
 
-    def initialize_model(self):
-        """Инициализация DeepSeek через Groq API"""
+    def initialize_model(self) -> None:
+        """Инициализация модели через Groq API."""
         try:
             logger.info(f"Инициализация модели {self.model_name} через Groq...")
-            
+
             self.llm = ChatGroq(
                 groq_api_key=settings.GROQ_API_KEY,
                 model_name=settings.MODEL_NAME,
                 temperature=settings.TEMPERATURE,
                 max_tokens=settings.MAX_TOKENS
             )
-            
+
             logger.info("Модель DeepSeek успешно инициализирована!")
         except Exception as e:
             logger.error(f"Ошибка при инициализации модели: {str(e)}")
             raise
 
-    def initialize_embeddings(self):
-        """Инициализация эмбеддингов"""
+    def initialize_embeddings(self) -> None:
+        """Инициализация эмбеддингов."""
         try:
             self.embeddings = HuggingFaceEmbeddings(
                 model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -50,11 +52,21 @@ class RAGPipeline:
             logger.error(f"Ошибка при инициализации эмбеддингов: {str(e)}")
             raise
 
-    def process_documents(self, tz_content: Dict, doc_content: Dict) -> tuple:
-        """Обработка документов и создание векторного хранилища"""
+    def process_documents(self, tz_content: Dict, doc_content: Dict) -> Tuple[Chroma, Chroma]:
+        """
+        Обработка документов и создание векторного хранилища.
+
+        :param tz_content: Словарь с содержимым ТЗ.
+        :param doc_content: Словарь с содержимым документации.
+        :return: Кортеж из двух векторных хранилищ (для ТЗ и документации).
+        """
         try:
             logger.info("Начало обработки документов...")
-            
+
+            # Проверяем формат входных данных
+            if not isinstance(tz_content, dict) or not isinstance(doc_content, dict):
+                raise ValueError("Неправильный формат данных: ожидается словарь")
+
             # Разбиваем текст на чанки
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=1000,
@@ -89,8 +101,15 @@ class RAGPipeline:
             logger.error(f"Ошибка при обработке документов: {str(e)}")
             raise
 
-    def analyze_documents(self, tz_vectorstore, doc_vectorstore, tz_content: Dict) -> List[Dict]:
-        """Анализ документов и поиск несоответствий"""
+    def analyze_documents(self, tz_vectorstore: Chroma, doc_vectorstore: Chroma, tz_content: Dict) -> List[Dict]:
+        """
+        Анализ документов и поиск несоответствий.
+
+        :param tz_vectorstore: Векторное хранилище для ТЗ.
+        :param doc_vectorstore: Векторное хранилище для документации.
+        :param tz_content: Словарь с содержимым ТЗ.
+        :return: Список результатов анализа.
+        """
         try:
             logger.info("Начало анализа документов...")
 
@@ -168,17 +187,22 @@ class RAGPipeline:
             logger.error(f"Ошибка при анализе документов: {str(e)}")
             raise
 
-    def _determine_status(self, analysis: str) -> dict:
-        """Определение статуса соответствия и критичности несоответствий"""
+    def _determine_status(self, analysis: str) -> Dict:
+        """
+        Определение статуса соответствия и критичности несоответствий.
+
+        :param analysis: Текст анализа.
+        :return: Словарь с результатами анализа.
+        """
         analysis_lower = analysis.lower()
-        
+
         # Базовый результат
         result = {
             "status": "unknown",
             "criticality": "unknown",
             "details": {}
         }
-        
+
         # Определение статуса соответствия
         if "fully compliant" in analysis_lower:
             result["status"] = "full_match"
@@ -186,7 +210,7 @@ class RAGPipeline:
             result["status"] = "partial_match"
         elif "non-compliant" in analysis_lower:
             result["status"] = "no_match"
-        
+
         # Определение уровня критичности
         if "critical" in analysis_lower:
             result["criticality"] = "critical"
@@ -194,48 +218,62 @@ class RAGPipeline:
             result["criticality"] = "major"
         elif "minor" in analysis_lower:
             result["criticality"] = "minor"
-        
+
         # Если нет несоответствий, устанавливаем критичность "none"
         if result["status"] == "full_match":
             result["criticality"] = "none"
-        
+
         # Добавляем детали анализа
         try:
             # Извлекаем несоответствия
             if "identified discrepancies" in analysis_lower:
                 inconsistencies_text = analysis.split("Identified Discrepancies")[1].split("Criticality Level")[0]
                 result["details"]["inconsistencies"] = inconsistencies_text.strip()
-            
+
             # Извлекаем необходимые исправления
             if "required corrections" in analysis_lower:
                 fixes_text = analysis.split("Required Corrections")[1].split("Assessment Justification")[0]
                 result["details"]["fixes"] = fixes_text.strip()
-        except:
+        except Exception:
             # В случае ошибки парсинга, возвращаем только базовый результат
-            pass
-            
+            logger.warning("Не удалось извлечь детали анализа из текста.")
+
         return result
+
 
 # Создаем глобальный экземпляр RAGPipeline
 rag_pipeline = RAGPipeline()
 
+
 def generate_analysis(tz_content: Dict, doc_content: Dict) -> List[Dict]:
-    """Генерация анализа документов"""
+    """
+    Генерация анализа документов.
+
+    :param tz_content: Словарь с содержимым ТЗ.
+    :param doc_content: Словарь с содержимым документации.
+    :return: Список результатов анализа.
+    """
     try:
         # Обрабатываем документы
         tz_vectorstore, doc_vectorstore = rag_pipeline.process_documents(tz_content, doc_content)
-        
+
         # Анализируем документы
         analysis_results = rag_pipeline.analyze_documents(tz_vectorstore, doc_vectorstore, tz_content)
-        
+
         return analysis_results
 
     except Exception as e:
         logger.error(f"Ошибка при генерации анализа: {str(e)}")
         raise
 
+
 def explain_point(point: str) -> str:
-    """Объяснение конкретного пункта"""
+    """
+    Объяснение конкретного пункта.
+
+    :param point: Пункт для объяснения.
+    :return: Текст объяснения.
+    """
     try:
         explanation_prompt = """You are an expert helping to understand technical requirements. Explain the following point from the technical specification:
 

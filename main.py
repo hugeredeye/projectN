@@ -10,9 +10,10 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
+from typing import Dict, List
 from document_loader import DocumentLoader
-from utils import format_analysis_response, validate_document_size
+from docx import Document
+from utils import format_analysis_response
 from config import settings
 from rag_pipeline import generate_analysis, explain_point
 from database import get_db, UploadedFile, ComparisonSession, db_manager, AsyncSessionLocal, create_tables, engine
@@ -22,7 +23,7 @@ import json
 from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from tasks import cleanup_task, calculate_storage_stats
 import asyncio
 
@@ -49,6 +50,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Добавляем middleware для установки кодировки
 @app.middleware("http")
 async def add_charset_middleware(request, call_next):
@@ -57,10 +59,20 @@ async def add_charset_middleware(request, call_next):
         response.headers["Content-Type"] = "text/html; charset=utf-8"
     return response
 
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     with open("static/index.html", encoding='utf-8') as f:
         return f.read()
+
+
+from fastapi.responses import FileResponse
+
+
+@app.get("/processing")
+async def processing_page():
+    return FileResponse("static/processing.html")
+
 
 # Запуск фоновых задач
 @app.on_event("startup")
@@ -72,6 +84,7 @@ async def startup_event():
     asyncio.create_task(cleanup_task())
     asyncio.create_task(calculate_storage_stats())
 
+
 # Функция для подсчета MD5 хеша файла
 async def calculate_md5(file_path: str) -> str:
     md5_hash = hashlib.md5()
@@ -80,10 +93,22 @@ async def calculate_md5(file_path: str) -> str:
             md5_hash.update(chunk)
     return md5_hash.hexdigest()
 
+
+# Функция для валидации размера файла
+def validate_document_size(file: UploadFile, max_size: int = 10 * 1024 * 1024) -> bool:
+    """
+    Проверяет, что размер файла не превышает max_size (по умолчанию 10 МБ).
+    """
+    file.file.seek(0, 2)  # Перемещаем указатель в конец файла
+    file_size = file.file.tell()  # Получаем размер файла
+    file.file.seek(0)  # Возвращаем указатель в начало файла
+    return file_size <= max_size
+
+
 @app.post("/upload")
 async def upload_file(
-    file: UploadFile,
-    db: AsyncSession = Depends(get_db)
+        file: UploadFile,
+        db: AsyncSession = Depends(get_db)
 ):
     try:
         if not validate_document_size(file):
@@ -104,7 +129,7 @@ async def upload_file(
 
         # Проверяем на дубликаты
         query = select(UploadedFile).where(UploadedFile.md5_hash == md5_hash,
-                                         UploadedFile.is_deleted == False)
+                                           UploadedFile.is_deleted == False)
         result = await db.execute(query)
         existing_file = result.scalar_one_or_none()
 
@@ -124,6 +149,7 @@ async def upload_file(
             file_type=file.content_type,
             file_size=len(content),
             md5_hash=md5_hash,
+            upload_date=datetime.utcnow(),  # Добавляем текущую дату и время
             file_metadata={
                 "upload_ip": "user_ip",  # Можно добавить реальный IP
                 "mime_type": file.content_type,
@@ -146,12 +172,13 @@ async def upload_file(
         logger.error(f"Ошибка при загрузке файла: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.post("/compare")
 async def compare_documents(
-    background_tasks: BackgroundTasks,
-    tz_file: UploadFile = File(...),
-    project_file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db)
+        background_tasks: BackgroundTasks,
+        tz_file: UploadFile = File(...),
+        project_file: UploadFile = File(...),
+        db: AsyncSession = Depends(get_db)
 ):
     try:
         start_time = datetime.utcnow()
@@ -191,10 +218,11 @@ async def compare_documents(
         logger.error(f"Ошибка при сравнении: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/status/{session_id}")
 async def get_status(
-    session_id: str,
-    db: AsyncSession = Depends(get_db)
+        session_id: str,
+        db: AsyncSession = Depends(get_db)
 ):
     try:
         query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
@@ -217,6 +245,7 @@ async def get_status(
         logger.error(f"Ошибка при получении статуса: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/explain")
 async def explain_document_point(point: str):
     try:
@@ -227,6 +256,7 @@ async def explain_document_point(point: str):
         })
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.get("/stats")
 async def get_stats():
@@ -243,10 +273,11 @@ async def get_stats():
         logger.error(f"Ошибка при получении статистики: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.delete("/files/{file_id}")
 async def delete_file(
-    file_id: int,
-    db: AsyncSession = Depends(get_db)
+        file_id: int,
+        db: AsyncSession = Depends(get_db)
 ):
     """Soft delete файла"""
     try:
@@ -267,6 +298,7 @@ async def delete_file(
         await db.rollback()
         logger.error(f"Ошибка при удалении файла: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime):
     """Фоновая задача для обработки документов"""
@@ -289,8 +321,40 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
             tz_path = os.path.join(UPLOAD_DIR, tz_file.stored_name)
             doc_path = os.path.join(UPLOAD_DIR, doc_file.stored_name)
 
+            # Читаем содержимое файлов
+            def read_file_content(file_path: str) -> Dict:
+                """Чтение содержимого файла и преобразование в формат для анализа."""
+                try:
+                    logger.info(f"Чтение файла: {file_path}")
+
+                    if file_path.endswith(".docx"):
+                        # Чтение .docx файла
+                        doc = Document(file_path)
+                        content = "\n".join([para.text for para in doc.paragraphs])
+                    else:
+                        # Пробуем сначала utf-8, затем cp1251
+                        try:
+                            with open(file_path, "r", encoding="utf-8") as file:
+                                content = file.read()
+                        except UnicodeDecodeError:
+                            logger.warning(
+                                f"Файл {file_path} не может быть прочитан с кодировкой utf-8. Пробуем cp1251.")
+                            with open(file_path, "r", encoding="cp1251") as file:
+                                content = file.read()
+
+                    return {
+                        "raw_text": content,
+                        "requirements": content.split("\n")  # Пример: разбиваем текст на строки как требования
+                    }
+                except Exception as e:
+                    logger.error(f"Ошибка при чтении файла {file_path}: {str(e)}")
+                    raise
+
+            tz_content = read_file_content(tz_path)
+            doc_content = read_file_content(doc_path)
+
             # Выполняем анализ
-            analysis_result = generate_analysis(tz_path, doc_path)
+            analysis_result = generate_analysis(tz_content, doc_content)
 
             # Обновляем результат в БД
             query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
@@ -323,6 +387,8 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
                 session.error_message = str(e)
                 await db.commit()
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
