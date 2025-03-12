@@ -9,6 +9,7 @@ RUN echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries \
     && echo "deb http://mirror.yandex.ru/debian/ bookworm main" > /etc/apt/sources.list \
     && echo "deb http://mirror.yandex.ru/debian-security/ bookworm-security main" >> /etc/apt/sources.list \
     && echo "deb http://mirror.yandex.ru/debian/ bookworm-updates main" >> /etc/apt/sources.list \
+    && apt-get update && apt-get install -y antiword && rm -rf /var/lib/apt/lists \
     && apt-get update \
     && apt-get install -y \
         build-essential \

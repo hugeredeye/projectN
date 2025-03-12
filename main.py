@@ -26,6 +26,7 @@ import hashlib
 from datetime import datetime, timedelta
 from tasks import cleanup_task, calculate_storage_stats
 import asyncio
+from sklearn.metrics.pairwise import cosine_similarity
 
 # Настраиваем логгер
 logger = logging.getLogger(__name__)
@@ -173,6 +174,41 @@ async def upload_file(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+async def read_file_content(file_id: int) -> Dict:
+    """Чтение содержимого файла из базы данных по его ID."""
+    async with AsyncSessionLocal() as session:
+        query = select(UploadedFile).where(UploadedFile.id == file_id)
+        result = await session.execute(query)
+        file = result.scalar_one_or_none()
+
+        if not file:
+            raise HTTPException(status_code=404, detail="Файл не найден")
+
+        file_path = os.path.join(UPLOAD_DIR, file.stored_name)
+
+        try:
+            if file.file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                # Чтение .docx файла
+                doc = Document(file_path)
+                content = "\n".join([para.text for para in doc.paragraphs])
+            else:
+                # Пробуем сначала utf-8, затем cp1251
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                except UnicodeDecodeError:
+                    with open(file_path, "r", encoding="cp1251") as f:
+                        content = f.read()
+
+            return {
+                "raw_text": content,
+                "requirements": content.split("\n")  # Пример: разбиваем текст на строки как требования
+            }
+        except Exception as e:
+            logger.error(f"Ошибка при чтении файла {file_path}: {str(e)}")
+            raise HTTPException(status_code=500, detail="Ошибка при чтении файла")
+
+
 @app.post("/compare")
 async def compare_documents(
         background_tasks: BackgroundTasks,
@@ -206,6 +242,15 @@ async def compare_documents(
             doc_result["file_id"],
             start_time
         )
+
+        # Новый вызов RAG для анализа
+        tz_content = await read_file_content(tz_result["file_id"])  # Обратите внимание на await
+        doc_content = await read_file_content(doc_result["file_id"])
+        analysis_result = generate_analysis(tz_content, doc_content)
+
+        # Сохранение результатов анализа в сессии
+        comparison_session.result = analysis_result
+        await db.commit()
 
         return {
             "status": "processing",
@@ -322,36 +367,8 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
             doc_path = os.path.join(UPLOAD_DIR, doc_file.stored_name)
 
             # Читаем содержимое файлов
-            def read_file_content(file_path: str) -> Dict:
-                """Чтение содержимого файла и преобразование в формат для анализа."""
-                try:
-                    logger.info(f"Чтение файла: {file_path}")
-
-                    if file_path.endswith(".docx"):
-                        # Чтение .docx файла
-                        doc = Document(file_path)
-                        content = "\n".join([para.text for para in doc.paragraphs])
-                    else:
-                        # Пробуем сначала utf-8, затем cp1251
-                        try:
-                            with open(file_path, "r", encoding="utf-8") as file:
-                                content = file.read()
-                        except UnicodeDecodeError:
-                            logger.warning(
-                                f"Файл {file_path} не может быть прочитан с кодировкой utf-8. Пробуем cp1251.")
-                            with open(file_path, "r", encoding="cp1251") as file:
-                                content = file.read()
-
-                    return {
-                        "raw_text": content,
-                        "requirements": content.split("\n")  # Пример: разбиваем текст на строки как требования
-                    }
-                except Exception as e:
-                    logger.error(f"Ошибка при чтении файла {file_path}: {str(e)}")
-                    raise
-
-            tz_content = read_file_content(tz_path)
-            doc_content = read_file_content(doc_path)
+            tz_content = await read_file_content(tz_file_id)
+            doc_content = await read_file_content(doc_file_id)
 
             # Выполняем анализ
             analysis_result = generate_analysis(tz_content, doc_content)
@@ -386,6 +403,23 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
                 session.status = "error"
                 session.error_message = str(e)
                 await db.commit()
+
+
+async def process_and_train_model(tz_file_id: int, doc_file_id: int):
+    # Чтение содержимого файлов
+    tz_content = await read_file_content(tz_file_id)
+    doc_content = await read_file_content(doc_file_id)
+
+    # Создание векторных представлений
+    tz_vector = rag_pipeline.embeddings.embed_documents([tz_content['raw_text']])
+    doc_vector = rag_pipeline.embeddings.embed_documents([doc_content['raw_text']])
+
+    # Здесь вы можете добавить код для обучения модели на основе векторных представлений
+    # Например, используя подходы к обучению с учителем или без учителя
+
+    # Сравнение векторных представлений
+    similarity = cosine_similarity(tz_vector, doc_vector)
+    return similarity
 
 
 if __name__ == "__main__":
