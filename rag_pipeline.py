@@ -249,7 +249,6 @@ def generate_analysis(tz_content: Dict, doc_content: Dict) -> List[Dict]:
 def explain_point(point: str) -> str:
     try:
         explanation_prompt = """You are an expert helping to understand technical requirements...
-        # Оставляем промпт как есть или адаптируем
         """
         explanation = rag_pipeline.llm.invoke(explanation_prompt.format(point=point)).content
         return explanation

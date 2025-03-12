@@ -20,24 +20,19 @@ from datetime import datetime
 from tasks import cleanup_task, calculate_storage_stats
 import asyncio
 
-# Загрузка переменных окружения из .env файла
 load_dotenv()
 
-# Настраиваем логгер
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="Анализ документов")
 
-# Создаем папку для загруженных файлов, если её нет
 UPLOAD_DIR = "uploads"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# Монтируем статические файлы
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Добавляем CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -153,6 +148,12 @@ async def read_file_content(file_id: int, db: AsyncSession = Depends(get_db)) ->
         content = loader.load_document(file_path)
         if not content:
             raise ValueError("Не удалось извлечь текст из файла")
+        
+        # Выводим текст в логи (первые 500 символов)
+        preview = content[:500] + "..." if len(content) > 500 else content
+        logger.info(f"Прочитанный текст из файла {file.original_name} (ID: {file_id}):")
+        logger.info(preview)
+        
         return {
             "raw_text": content,
             "requirements": content.split("\n")
@@ -190,7 +191,8 @@ async def compare_documents(
             session_id,
             tz_result["file_id"],
             doc_result["file_id"],
-            start_time
+            start_time,
+            db
         )
 
         return {
@@ -202,6 +204,36 @@ async def compare_documents(
         await db.rollback()
         logger.error(f"Ошибка при сравнении: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
+async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime, db: AsyncSession):
+    try:
+        tz_content = await read_file_content(tz_file_id, db)
+        doc_content = await read_file_content(doc_file_id, db)
+        analysis_result = generate_analysis(tz_content, doc_content)
+
+        query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
+        result = await db.execute(query)
+        session = result.scalar_one_or_none()
+
+        if session:
+            end_time = datetime.utcnow()
+            processing_time = int((end_time - start_time).total_seconds())
+            session.status = "completed"
+            session.completed_at = end_time
+            session.processing_time = processing_time
+            session.result = analysis_result
+            await db.commit()
+
+        logger.info(f"Анализ документов завершен: {session_id}")
+    except Exception as e:
+        logger.error(f"Ошибка при анализе документов: {str(e)}")
+        query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
+        result = await db.execute(query)
+        session = result.scalar_one_or_none()
+        if session:
+            session.status = "error"
+            session.error_message = str(e)
+            await db.commit()
 
 @app.get("/status/{session_id}")
 async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
@@ -262,37 +294,6 @@ async def delete_file(file_id: int, db: AsyncSession = Depends(get_db)):
         await db.rollback()
         logger.error(f"Ошибка при удалении файла: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime):
-    async with AsyncSessionLocal() as db:
-        try:
-            tz_content = await read_file_content(tz_file_id)
-            doc_content = await read_file_content(doc_file_id)
-            analysis_result = generate_analysis(tz_content, doc_content)
-
-            query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
-            result = await db.execute(query)
-            session = result.scalar_one_or_none()
-
-            if session:
-                end_time = datetime.utcnow()
-                processing_time = int((end_time - start_time).total_seconds())
-                session.status = "completed"
-                session.completed_at = end_time
-                session.processing_time = processing_time
-                session.result = analysis_result
-                await db.commit()
-
-            logger.info(f"Анализ документов завершен: {session_id}")
-        except Exception as e:
-            logger.error(f"Ошибка при анализе документов: {str(e)}")
-            query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
-            result = await db.execute(query)
-            session = result.scalar_one_or_none()
-            if session:
-                session.status = "error"
-                session.error_message = str(e)
-                await db.commit()
 
 if __name__ == "__main__":
     import uvicorn
