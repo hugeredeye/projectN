@@ -245,12 +245,26 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
         if not session:
             raise HTTPException(status_code=404, detail="Сессия не найдена")
 
+        if session.status == "completed" and session.result:
+            # Форматируем отчет
+            report = []
+            for idx, res in enumerate(session.result, 1):
+                report.append({
+                    "№": idx,
+                    "Требование": res["requirement"],
+                    "Статус": res["status"]["status"],
+                    "Критичность": res["status"]["criticality"],
+                    "Анализ": res["analysis"]
+                })
+        else:
+            report = None
+
         return {
             "status": session.status,
             "created_at": session.created_at,
             "completed_at": session.completed_at,
             "processing_time": session.processing_time,
-            "result": session.result,
+            "report": report,
             "error_message": session.error_message
         }
     except Exception as e:

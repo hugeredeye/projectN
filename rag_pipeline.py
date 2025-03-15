@@ -174,9 +174,13 @@ class RAGPipeline:
         try:
             logger.info("Начало анализа документов...")
             analysis_prompt = PromptTemplate(
-                template="""You are an expert in analyzing technical documentation...
-                # Оставляем промпт как есть или адаптируем под ваши нужды
-                """,
+                template="""You are an expert in analyzing technical documentation. Your task is to check if the provided documentation satisfies the given requirement from the technical specification (TZ). Use the context from the TZ and the documentation to determine compliance. Provide a clear explanation.
+
+                Requirement: {requirement}
+                TZ Context: {tz_context}
+                Documentation Context: {doc_context}
+
+                Analysis (explain if the requirement is met, partially met, or not met):""",
                 input_variables=["requirement", "tz_context", "doc_context"]
             )
             
@@ -214,7 +218,15 @@ class RAGPipeline:
 
     def _determine_status(self, analysis: str) -> Dict:
         """Определение статуса соответствия и критичности несоответствий."""
-        return {"status": "unknown", "criticality": "low"}
+        analysis_lower = analysis.lower()
+        if "выполнено" in analysis_lower or "met" in analysis_lower:
+            return {"status": "fulfilled", "criticality": "none"}
+        elif "частично" in analysis_lower or "partially" in analysis_lower:
+            return {"status": "partially_fulfilled", "criticality": "medium"}
+        elif "не выполнено" in analysis_lower or "not met" in analysis_lower:
+            return {"status": "not_fulfilled", "criticality": "high"}
+        else:
+            return {"status": "unknown", "criticality": "low"}
 
     def check_tz_correctness(self, tz_vectorstore: Chroma, reference_data: List[Dict]) -> Dict:
         """Проверяет корректность ТЗ по сравнению с эталонами."""
