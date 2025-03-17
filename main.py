@@ -7,7 +7,6 @@ from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict
-from document_loader import DocumentLoader
 from config import settings
 from rag_pipeline import generate_analysis, explain_point
 from database import get_db, UploadedFile, ComparisonSession, db_manager, AsyncSessionLocal, create_tables, engine
@@ -19,6 +18,7 @@ import hashlib
 from datetime import datetime
 from tasks import cleanup_task, calculate_storage_stats
 import asyncio
+from document_loader import DocumentLoader
 
 load_dotenv()
 
@@ -87,21 +87,34 @@ async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
         file_path = os.path.join(UPLOAD_DIR, stored_name)
 
         content = await file.read()
+        logger.info(f"Получен файл {file.filename}, размер: {len(content)} байт")
+        
         with open(file_path, "wb") as buffer:
             buffer.write(content)
+        
+        if not os.path.exists(file_path):
+            logger.error(f"Файл не был сохранён: {file_path}")
+            raise HTTPException(status_code=500, detail="Не удалось сохранить файл")
+        logger.info(f"Файл сохранён: {file_path}, размер: {os.path.getsize(file_path)} байт")
 
         md5_hash = await calculate_md5(file_path)
+        logger.info(f"MD5 хэш файла {file_path}: {md5_hash}")
+
         query = select(UploadedFile).where(UploadedFile.md5_hash == md5_hash, UploadedFile.is_deleted == False)
         result = await db.execute(query)
         existing_file = result.scalar_one_or_none()
 
         if existing_file:
-            os.remove(file_path)
+            # Обновляем путь к файлу в базе, вместо удаления нового файла
+            existing_file.stored_name = stored_name
+            await db.commit()
+            await db.refresh(existing_file)
+            logger.info(f"Обновлён путь для дубликата: {file_path}, ID: {existing_file.id}")
             return {
                 "status": "success",
                 "file_id": existing_file.id,
                 "filename": existing_file.original_name,
-                "message": "Файл уже существует в системе"
+                "message": "Файл уже существует, путь обновлён"
             }
 
         db_file = UploadedFile(
@@ -121,6 +134,7 @@ async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
         await db.commit()
         await db.refresh(db_file)
 
+        logger.info(f"Файл добавлен в базу, ID: {db_file.id}")
         return {
             "status": "success",
             "file_id": db_file.id,
@@ -130,10 +144,11 @@ async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
     except Exception as e:
         await db.rollback()
         logger.error(f"Ошибка при загрузке файла: {str(e)}")
+        if os.path.exists(file_path):
+            os.remove(file_path)  # Удаляем файл, если он был создан, но произошла ошибка
         raise HTTPException(status_code=400, detail=str(e))
 
 async def read_file_content(file_id: int, db: AsyncSession = Depends(get_db)) -> Dict:
-    """Чтение содержимого файла из базы данных по его ID."""
     query = select(UploadedFile).where(UploadedFile.id == file_id)
     result = await db.execute(query)
     file = result.scalar_one_or_none()
@@ -142,25 +157,26 @@ async def read_file_content(file_id: int, db: AsyncSession = Depends(get_db)) ->
         raise HTTPException(status_code=404, detail="Файл не найден")
 
     file_path = os.path.join(UPLOAD_DIR, file.stored_name)
-    loader = DocumentLoader()
+    logger.info(f"Чтение файла: {file_path}, существует: {os.path.exists(file_path)}")
 
-    try:
-        content = loader.load_document(file_path)
-        if not content:
-            raise ValueError("Не удалось извлечь текст из файла")
-        
-        # Выводим текст в логи (первые 500 символов)
-        preview = content[:500] + "..." if len(content) > 500 else content
-        logger.info(f"Прочитанный текст из файла {file.original_name} (ID: {file_id}):")
-        logger.info(preview)
-        
-        return {
-            "raw_text": content,
-            "requirements": content.split("\n")
-        }
-    except Exception as e:
-        logger.error(f"Ошибка при чтении файла {file_path}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Ошибка при чтении файла: {str(e)}")
+    if not os.path.exists(file_path):
+        logger.error(f"Файл не найден на диске: {file_path}")
+        raise HTTPException(status_code=500, detail=f"Файл не найден на диске: {file_path}")
+
+    loader = DocumentLoader()
+    content = loader.load_document(file_path)
+    if not content:
+        logger.error(f"Не удалось извлечь текст из файла: {file_path}")
+        raise ValueError("Не удалось извлечь текст из файла")
+
+    preview = content[:500] + "..." if len(content) > 500 else content
+    logger.info(f"Прочитанный текст из файла {file.original_name} (ID: {file_id}):")
+    logger.info(preview)
+
+    return {
+        "raw_text": content,
+        "requirements": content.split("\n")
+    }
 
 @app.post("/compare")
 async def compare_documents(
@@ -207,6 +223,7 @@ async def compare_documents(
 
 async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime, db: AsyncSession):
     try:
+        logger.info(f"Начало обработки сессии {session_id}")
         tz_content = await read_file_content(tz_file_id, db)
         doc_content = await read_file_content(doc_file_id, db)
         analysis_result = generate_analysis(tz_content, doc_content)
@@ -246,7 +263,6 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
             raise HTTPException(status_code=404, detail="Сессия не найдена")
 
         if session.status == "completed" and session.result:
-            # Форматируем отчет
             report = []
             for idx, res in enumerate(session.result, 1):
                 report.append({
