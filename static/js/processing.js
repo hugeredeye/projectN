@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             switch (data.status) {
                 case 'processing':
-                    progressText.textContent = `Обработка: ${data.progress}%`;
+                    progressText.textContent = 'Обработка...';
                     downloadButton.style.display = 'none';
                     viewErrorsButton.style.display = 'none';
                     setTimeout(checkStatus, 1000); // Проверяем каждую секунду
@@ -104,7 +104,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;
 
                 case 'error':
-                    progressText.textContent = `Ошибка: ${data.error}`;
+                    progressText.textContent = `Ошибка: ${data.error_message || 'Неизвестная ошибка'}`;
                     downloadButton.style.display = 'none';
                     viewErrorsButton.style.display = 'none';
                     break;

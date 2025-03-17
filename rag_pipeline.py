@@ -183,17 +183,27 @@ class RAGPipeline:
                 Analysis (explain if the requirement is met, partially met, or not met):""",
                 input_variables=["requirement", "tz_context", "doc_context"]
             )
-            
+
+            comparison_prompt = PromptTemplate(
+                template="""You are an expert in comparing technical requirements with documentation. Your task is to compare the following requirement from the TZ with the corresponding documentation and identify any discrepancies.
+
+                Requirement from TZ: {requirement}
+                Documentation Content: {doc_content}
+
+                Please provide a detailed comparison and highlight any missing or incorrect information in the documentation:""",
+                input_variables=["requirement", "doc_content"]
+            )
+
             tz_qa = RetrievalQA.from_chain_type(
                 llm=self.llm, chain_type="stuff", retriever=tz_vectorstore.as_retriever(search_kwargs={"k": 3})
             )
             doc_qa = RetrievalQA.from_chain_type(
                 llm=self.llm, chain_type="stuff", retriever=doc_vectorstore.as_retriever(search_kwargs={"k": 3})
             )
-            
+
             analysis_results = []
             total_requirements = len(tz_content['requirements'])
-            
+
             for idx, requirement in enumerate(tz_content['requirements'], 1):
                 logger.info(f"Анализ требования {idx}/{total_requirements}")
                 tz_context = tz_qa.run(requirement)
@@ -201,15 +211,22 @@ class RAGPipeline:
                 analysis = self.llm.invoke(
                     analysis_prompt.format(requirement=requirement, tz_context=tz_context, doc_context=doc_context)
                 ).content
+
+                # Сравнение требования с документацией
+                comparison = self.llm.invoke(
+                    comparison_prompt.format(requirement=requirement, doc_content=doc_context)
+                ).content
+
                 result = {
                     "requirement": requirement,
                     "tz_context": tz_context,
                     "doc_context": doc_context,
                     "analysis": analysis,
+                    "comparison": comparison if comparison else "Сравнение не выполнено",
                     "status": self._determine_status(analysis)
                 }
                 analysis_results.append(result)
-            
+
             logger.info("Анализ документов завершен успешно")
             return analysis_results
         except Exception as e:

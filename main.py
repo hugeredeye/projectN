@@ -226,14 +226,15 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
 
         logger.info(f"Анализ документов завершен: {session_id}")
     except Exception as e:
-        logger.error(f"Ошибка при анализе документов: {str(e)}")
-        query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
-        result = await db.execute(query)
-        session = result.scalar_one_or_none()
-        if session:
-            session.status = "error"
-            session.error_message = str(e)
-            await db.commit()
+        logger.error(f"Ошибка при анализе документов: {str(e)}", exc_info=True)
+        async with db.begin():
+            query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
+            result = await db.execute(query)
+            session = result.scalar_one_or_none()
+            if session:
+                session.status = "error"
+                session.error_message = str(e) if str(e) else "Неизвестная ошибка"
+                await db.commit()
 
 @app.get("/status/{session_id}")
 async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
@@ -245,30 +246,29 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
         if not session:
             raise HTTPException(status_code=404, detail="Сессия не найдена")
 
+        # Форматируем отчет
+        report = []
         if session.status == "completed" and session.result:
-            # Форматируем отчет
-            report = []
             for idx, res in enumerate(session.result, 1):
                 report.append({
                     "№": idx,
                     "Требование": res["requirement"],
                     "Статус": res["status"]["status"],
                     "Критичность": res["status"]["criticality"],
-                    "Анализ": res["analysis"]
+                    "Анализ": res["analysis"],
+                    "Сравнение": res.get("comparison", "Нет данных")
                 })
-        else:
-            report = None
 
         return {
             "status": session.status,
             "created_at": session.created_at,
             "completed_at": session.completed_at,
             "processing_time": session.processing_time,
-            "report": report,
-            "error_message": session.error_message
+            "report": report if report else None,
+            "error_message": session.error_message or "Нет информации об ошибке"
         }
     except Exception as e:
-        logger.error(f"Ошибка при получении статуса: {str(e)}")
+        logger.error(f"Ошибка при получении статуса: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/explain")

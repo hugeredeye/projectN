@@ -19,6 +19,10 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function displayResults(results) {
+    if (!results) {
+        document.getElementById('error-message').textContent = 'Данные отчета не получены';
+        return;
+    }
     // Отображаем соответствующие пункты
     const matchingPoints = document.getElementById('matching-points');
     results.matching_points.forEach(point => {
