@@ -18,10 +18,23 @@ from sklearn.metrics.pairwise import cosine_similarity
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Промпты
+tz_extraction_prompt = PromptTemplate(
+    input_variables=["text"],
+    template="Это требования к документации:\n\n{text}\n\nИзвлеки ключевые требования в виде списка блоков, каждый пункт начинай с '- '."
+)
+
+comparison_prompt = PromptTemplate(
+    input_variables=["requirements", "doc_content"],
+    template="Вот требования к документации:\n\n{requirements}\n\nВот содержимое документации:\n\n{doc_content}\n\nСравни их по блокам и для каждого требования укажи:\n- Требование: [текст]\n- Соответствует: [да/нет]\n- Причина: [текст, если нет]\n"
+)
+
 class RAGPipeline:
     def __init__(self):
         """Инициализация RAGPipeline."""
         self.model_name = settings.MODEL_NAME
+        logger.info(f"Используемая модель: {self.model_name}")
+        logger.info(f"Токен GROQ_API_KEY: {'установлен' if settings.GROQ_API_KEY else 'не установлен'}")
         self.initialize_model()
         self.initialize_embeddings()
         
@@ -46,11 +59,11 @@ class RAGPipeline:
             logger.info(f"Инициализация модели {self.model_name} через Groq...")
             self.llm = ChatGroq(
                 groq_api_key=settings.GROQ_API_KEY,
-                model_name=settings.MODEL_NAME,
+                model_name=self.model_name,
                 temperature=settings.TEMPERATURE,
                 max_tokens=settings.MAX_TOKENS
             )
-            logger.info("Модель DeepSeek успешно инициализирована!")
+            logger.info(f"Модель {self.model_name} успешно инициализирована!")
         except Exception as e:
             logger.error(f"Ошибка при инициализации модели: {str(e)}")
             raise
@@ -119,6 +132,17 @@ class RAGPipeline:
         
         return blocks
 
+    def split_into_blocks(self, text: str) -> List[str]:
+        """Разбивает текст на логические блоки."""
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=500,  # Размер блока (можно настроить)
+            chunk_overlap=50,
+            separators=["\n\n", "\n", r"(?<=^\d+\.\s+.*$)", " "],
+            length_function=len
+        )
+        blocks = splitter.split_text(text)
+        return [block.strip() for block in blocks if block.strip()]
+
     def load_and_process_reference_tzs(self, reference_dir: str) -> List[Dict]:
         """Загружает и обрабатывает эталонные ТЗ из директории."""
         reference_data = []
@@ -145,21 +169,17 @@ class RAGPipeline:
             if not isinstance(tz_content, dict) or not isinstance(doc_content, dict):
                 raise ValueError("Неправильный формат данных: ожидается словарь")
             
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000, chunk_overlap=200, length_function=len,
-                separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""]
-            )
-            tz_chunks = text_splitter.split_text(tz_content['raw_text'])
-            doc_chunks = text_splitter.split_text(doc_content['raw_text'])
+            tz_blocks = self.split_into_blocks(tz_content['raw_text'])
+            doc_blocks = self.split_into_blocks(doc_content['raw_text'])
             
-            logger.info(f"Создано чанков: ТЗ - {len(tz_chunks)}, Документация - {len(doc_chunks)}")
+            logger.info(f"Создано блоков: ТЗ - {len(tz_blocks)}, Документация - {len(doc_blocks)}")
             
             tz_vectorstore = Chroma.from_texts(
-                texts=tz_chunks, embedding=self.embeddings,
+                texts=tz_blocks, embedding=self.embeddings,
                 persist_directory=os.path.join(settings.VECTOR_DB_PATH, "tz")
             )
             doc_vectorstore = Chroma.from_texts(
-                texts=doc_chunks, embedding=self.embeddings,
+                texts=doc_blocks, embedding=self.embeddings,
                 persist_directory=os.path.join(settings.VECTOR_DB_PATH, "doc")
             )
             
@@ -169,47 +189,68 @@ class RAGPipeline:
             logger.error(f"Ошибка при обработке документов: {str(e)}")
             raise
 
+    def extract_tz_requirements(self, tz_content: Dict) -> str:
+        """Извлекает требования из ТЗ с промптом."""
+        try:
+            logger.info("Извлечение требований из ТЗ...")
+            tz_text = tz_content["raw_text"][:10000]
+            requirements = self.llm.invoke(tz_extraction_prompt.format(text=tz_text)).content
+            logger.info(f"Извлечённые требования:\n{requirements}")
+            return requirements
+        except Exception as e:
+            logger.error(f"Ошибка при извлечении требований из ТЗ: {str(e)}")
+            # Fallback: разбиваем на блоки и фильтруем по ключевым словам
+            blocks = self.split_into_blocks(tz_text)
+            fallback_result = "\n".join(f"- {block}" for block in blocks if any(keyword in block.lower() for keyword in ["требования", "должен", "характеристики"]))
+            logger.info(f"Использован fallback в extract_tz_requirements:\n{fallback_result}")
+            return fallback_result
+
     def analyze_documents(self, tz_vectorstore: Chroma, doc_vectorstore: Chroma, tz_content: Dict) -> List[Dict]:
         """Анализ документов и поиск несоответствий."""
         try:
             logger.info("Начало анализа документов...")
-            analysis_prompt = PromptTemplate(
-                template="""You are an expert in analyzing technical documentation. Your task is to check if the provided documentation satisfies the given requirement from the technical specification (TZ). Use the context from the TZ and the documentation to determine compliance. Provide a clear explanation.
-
-                Requirement: {requirement}
-                TZ Context: {tz_context}
-                Documentation Context: {doc_context}
-
-                Analysis (explain if the requirement is met, partially met, or not met):""",
-                input_variables=["requirement", "tz_context", "doc_context"]
-            )
+            requirements = self.extract_tz_requirements(tz_content)
+            doc_text = "\n".join(doc_vectorstore._collection.peek(10)['documents'])[:10000]
             
-            tz_qa = RetrievalQA.from_chain_type(
-                llm=self.llm, chain_type="stuff", retriever=tz_vectorstore.as_retriever(search_kwargs={"k": 3})
-            )
-            doc_qa = RetrievalQA.from_chain_type(
-                llm=self.llm, chain_type="stuff", retriever=doc_vectorstore.as_retriever(search_kwargs={"k": 3})
-            )
-            
+            try:
+                comparison_result = self.llm.invoke(comparison_prompt.format(
+                    requirements=requirements,
+                    doc_content=doc_text
+                )).content
+                logger.info(f"Результат сравнения:\n{comparison_result}")
+            except Exception as e:
+                logger.error(f"Ошибка при вызове LLM для сравнения: {str(e)}")
+                # Fallback: сравниваем блоки вручную
+                req_blocks = [r.strip()[2:] for r in requirements.split("\n") if r.strip().startswith("- ")]
+                doc_blocks = self.split_into_blocks(doc_text)
+                fallback_result = []
+                for req in req_blocks:
+                    matches = any(req.lower() in doc.lower() for doc in doc_blocks)
+                    fallback_result.append(
+                        f"- Требование: {req}\n"
+                        f"- Соответствует: {'да' if matches else 'нет'}\n"
+                        f"- Причина: {'Найдено в документации' if matches else 'Не найдено в документации'}"
+                    )
+                comparison_result = "\n".join(fallback_result)
+                logger.info(f"Использован fallback в analyze_documents:\n{comparison_result}")
+
             analysis_results = []
-            total_requirements = len(tz_content['requirements'])
-            
-            for idx, requirement in enumerate(tz_content['requirements'], 1):
-                logger.info(f"Анализ требования {idx}/{total_requirements}")
-                tz_context = tz_qa.run(requirement)
-                doc_context = doc_qa.run(requirement)
-                analysis = self.llm.invoke(
-                    analysis_prompt.format(requirement=requirement, tz_context=tz_context, doc_context=doc_context)
-                ).content
-                result = {
-                    "requirement": requirement,
-                    "tz_context": tz_context,
-                    "doc_context": doc_context,
-                    "analysis": analysis,
-                    "status": self._determine_status(analysis)
-                }
-                analysis_results.append(result)
-            
+            lines = comparison_result.split("\n")
+            current_requirement = {}
+            for line in lines:
+                line = line.strip()
+                if line.startswith("- Требование:"):
+                    if current_requirement:
+                        analysis_results.append(current_requirement)
+                    current_requirement = {"requirement": line.replace("- Требование:", "").strip()}
+                elif line.startswith("- Соответствует:"):
+                    status = "yes" if "да" in line.lower() else "no"
+                    current_requirement["status"] = {"status": status, "criticality": "none" if status == "yes" else "high"}
+                elif line.startswith("- Причина:"):
+                    current_requirement["analysis"] = line.replace("- Причина:", "").strip()
+            if current_requirement:
+                analysis_results.append(current_requirement)
+
             logger.info("Анализ документов завершен успешно")
             return analysis_results
         except Exception as e:
@@ -217,7 +258,7 @@ class RAGPipeline:
             raise
 
     def _determine_status(self, analysis: str) -> Dict:
-        """Определение статуса соответствия и критичности несоответствий."""
+        """Определение статуса соответствия и критичности."""
         analysis_lower = analysis.lower()
         if "выполнено" in analysis_lower or "met" in analysis_lower:
             return {"status": "fulfilled", "criticality": "none"}
@@ -260,10 +301,10 @@ def generate_analysis(tz_content: Dict, doc_content: Dict) -> List[Dict]:
 
 def explain_point(point: str) -> str:
     try:
-        explanation_prompt = """You are an expert helping to understand technical requirements...
-        """
+        explanation_prompt = """You are an expert helping to understand technical requirements. Explain the following point in simple terms:\n\n{point}"""
         explanation = rag_pipeline.llm.invoke(explanation_prompt.format(point=point)).content
         return explanation
     except Exception as e:
         logger.error(f"Ошибка при объяснении пункта: {str(e)}")
-        raise
+        # Fallback: возвращаем базовое объяснение
+        return f"Это требование связано с техническими аспектами: {point}"
