@@ -130,8 +130,53 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Обработчик кнопки просмотра ошибок
-    viewErrorsButton.addEventListener('click', function() {
-        window.location.href = '/errors';
+    viewErrorsButton.addEventListener('click', async function() {
+        try {
+            const response = await fetch(`/errors/${sessionId}`);
+            if (!response.ok) {
+                throw new Error('Ошибка при получении отчета об ошибках');
+            }
+            const data = await response.json();
+            
+            // Создаем модальное окно для отображения ошибок
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h2>Отчет об ошибках</h2>
+                    <div class="errors-list">
+                        ${data.errors.map(error => `
+                            <div class="error-item">
+                                <h3>${error.requirement}</h3>
+                                <p class="status ${error.status === 'соответствует' ? 'success' : 'error'}">
+                                    Статус: ${error.status}
+                                </p>
+                                <p>Критичность: ${error.criticality}</p>
+                                <p>Анализ: ${error.analysis}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button class="close-button">Закрыть</button>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Обработчик закрытия модального окна
+            modal.querySelector('.close-button').addEventListener('click', () => {
+                modal.remove();
+            });
+            
+            // Закрытие по клику вне модального окна
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+        } catch (error) {
+            alert('Ошибка при получении отчета об ошибках');
+            console.error('Ошибка:', error);
+        }
     });
 
     // Начинаем проверку статуса

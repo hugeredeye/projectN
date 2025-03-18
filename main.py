@@ -3,7 +3,7 @@ import time
 import logging
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, BackgroundTasks
-from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict
@@ -285,6 +285,104 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
         }
     except Exception as e:
         logger.error(f"Ошибка при получении статуса: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/download-report/{session_id}")
+async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
+        result = await db.execute(query)
+        session = result.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Сессия не найдена")
+
+        if session.status != "completed":
+            raise HTTPException(status_code=400, detail="Отчет еще не готов")
+
+        # Создаем PDF отчет
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        import io
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        styles = getSampleStyleSheet()
+        elements = []
+
+        # Заголовок
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            spaceAfter=30
+        )
+        elements.append(Paragraph("Отчет о сравнении документов", title_style))
+
+        # Добавляем результаты
+        for idx, res in enumerate(session.result, 1):
+            # Заголовок пункта
+            elements.append(Paragraph(f"Пункт {idx}: {res['requirement']}", styles['Heading2']))
+            
+            # Статус и критичность
+            status_color = colors.green if res['status']['status'] == 'соответствует' else colors.red
+            status_style = ParagraphStyle(
+                'Status',
+                parent=styles['Normal'],
+                textColor=status_color
+            )
+            elements.append(Paragraph(f"Статус: {res['status']['status']}", status_style))
+            elements.append(Paragraph(f"Критичность: {res['status']['criticality']}", styles['Normal']))
+            
+            # Анализ
+            elements.append(Paragraph("Анализ:", styles['Heading3']))
+            elements.append(Paragraph(res['analysis'], styles['Normal']))
+            elements.append(Spacer(1, 20))
+
+        # Создаем PDF
+        doc.build(elements)
+        buffer.seek(0)
+
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=report_{session_id}.pdf"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Ошибка при создании отчета: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/errors/{session_id}")
+async def get_errors(session_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
+        result = await db.execute(query)
+        session = result.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Сессия не найдена")
+
+        if session.status != "completed":
+            raise HTTPException(status_code=400, detail="Отчет еще не готов")
+
+        # Фильтруем только ошибки и несоответствия
+        errors = []
+        for res in session.result:
+            if res['status']['status'] != 'соответствует':
+                errors.append({
+                    "requirement": res['requirement'],
+                    "status": res['status']['status'],
+                    "criticality": res['status']['criticality'],
+                    "analysis": res['analysis']
+                })
+
+        return {"errors": errors}
+    except Exception as e:
+        logger.error(f"Ошибка при получении ошибок: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/explain")
