@@ -118,11 +118,11 @@ h1 {
 
 /* Карточка с результатами */
 .result-card {
-    background: white;
-    border-radius: 20px;
-    padding: 40px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
+    position: relative;
+    padding: 20px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 /* Секции с результатами */
@@ -242,5 +242,255 @@ h1 {
         right: 20px;
         padding: 12px 20px;
         font-size: 14px;
+    }
+}
+
+.error-report {
+    background-color: white;
+    border: 2px solid pink;
+    padding: 10px;
+    margin-top: 20px;
+    display: none;
+}
+
+.error-report-scrollable {
+    margin-top: 20px;
+    padding: 10px;
+    border: 2px solid pink;
+    border-radius: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: #f9f9f9;
+}
+
+.error-content p {
+    margin: 5px 0;
+}
+
+/* Контейнер для ответов */
+.response-container {
+    background-color: white;
+    border-radius: 24px; /* Закругленные углы, как у .upload-card */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); /* Тень, как у .upload-card */
+    padding: 20px;
+    margin: 20px;
+}
+
+/* Внутренний контейнер с прокруткой */
+.response-content {
+    max-height: 400px; /* Ограничение высоты, подстрой под свои нужды */
+    overflow-y: auto; /* Включаем вертикальную прокрутку */
+    padding-right: 10px; /* Отступ для скроллбара */
+}
+
+/* Опционально: стилизация скроллбара */
+.response-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.response-content::-webkit-scrollbar-thumb {
+    background-color: #ccc;
+    border-radius: 4px;
+}
+
+.response-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.download-button,
+.view-errors-button {
+    background-color: #E7C7D3; /* Розовый цвет фона */
+    color: white; /* Белый текст для контраста */
+    border: none; /* Убираем обводку */
+    border-radius: 16px; /* Закругленные углы */
+    padding: 16px 24px; /* Внутренние отступы */
+    font-size: 16px; /* Размер шрифта */
+    font-weight: 500; /* Толщина шрифта */
+    cursor: pointer; /* Курсор при наведении */
+    transition: background-color 0.2s, transform 0.2s; /* Плавные эффекты */
+}
+
+/* Эффекты при наведении */
+.download-button:hover,
+.view-errors-button:hover {
+    background-color: #D1A5B1; /* Более темный розовый */
+    transform: translateY(-2px); /* Легкий подъем кнопки */
+}
+
+/* Эффект при нажатии */
+.download-button:active,
+.view-errors-button:active {
+    transform: translateY(0); /* Возврат в исходное положение */
+}
+
+.download-button {
+    margin-bottom: 20px; /* Отступ снизу для первой кнопки */
+}
+
+.report-container {
+    width: 100%;
+    padding: 20px;
+    text-align: left;
+    line-height: 1.5;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Стили для общего контейнера результатов */
+.result-card {
+    max-width: 800px; /* Ограничиваем ширину для удобства чтения */
+    margin: 0 auto; /* Центрируем на странице */
+}
+
+/* Стили для контейнера ответа */
+.response-container {
+    background-color: white; /* Белый фон */
+    border-radius: 10px; /* Закругленные углы */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Легкая тень для глубины */
+    padding: 20px; /* Внутренние отступы */
+    margin: 20px 0; /* Внешние отступы */
+}
+
+/* Стили для содержимого с прокруткой */
+.response-content {
+    max-height: 400px; /* Максимальная высота, после которой появляется прокрутка */
+    overflow-y: auto; /* Включаем вертикальную прокрутку */
+    padding-right: 10px; /* Отступ справа для скроллбара */
+}
+
+/* Стили для секций результатов */
+.result-section {
+    margin-bottom: 20px; /* Отступ между секциями */
+}
+
+/* Заголовки внутри секций */
+.result-section h2 {
+    color: #333; /* Темный цвет для контраста */
+    margin-bottom: 10px; /* Отступ под заголовком */
+}
+
+/* Стили для списков пунктов */
+.points-list {
+    text-align: left; /* Выравнивание текста слева */
+}
+
+/* Стили для параграфов внутри списков */
+.points-list p {
+    margin: 10px 0; /* Отступы между пунктами */
+    color: #333; /* Темный цвет текста */
+    line-height: 1.5; /* Увеличенный межстрочный интервал для читаемости */
+}
+
+@media (max-width: 600px) {
+    .result-card {
+        max-width: 100%; /* Полная ширина на маленьких экранах */
+        margin: 0 10px;
+    }
+
+    .response-container {
+        padding: 10px; /* Уменьшаем отступы */
+    }
+
+    .response-content {
+        max-height: 300px; /* Уменьшаем высоту для мобильных */
+    }
+}
+
+/* Стили для модального окна */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: white;
+    border-radius: 10px;
+    padding: 20px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.errors-list {
+    margin-top: 10px;
+}
+
+.error-item {
+    margin-bottom: 15px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.error-item h3 {
+    margin: 0 0 5px;
+    font-size: 16px;
+}
+
+.error-item p {
+    margin: 5px 0;
+    font-size: 14px;
+}
+
+.status.success {
+    color: green;
+}
+
+.status.error {
+    color: red;
+}
+
+.close-button {
+    background-color: #E7C7D3;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.close-button:hover {
+    background-color: #D1A5B1;
+}
+
+/* Стили для контейнера результатов */
+.result-card {
+    background-color: white;
+    border-radius: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    padding: 20px;
+    margin: 20px;
+}
+
+.points-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+/* Адаптивность */
+@media (max-width: 600px) {
+    .modal-content {
+        max-width: 90%;
+    }
+
+    .result-card {
+        margin: 10px;
+        padding: 15px;
+    }
+
+    .points-list {
+        max-height: 300px;
     }
 }

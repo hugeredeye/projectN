@@ -3,6 +3,7 @@ let docFile = null;
 let fileList = null;
 let uploadedFiles = null;
 let compareButton = null;
+let errorReport = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     const tzInput = document.getElementById('tz-input');
@@ -10,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
     compareButton = document.getElementById('compare-button');
     uploadedFiles = document.getElementById('uploaded-files');
     fileList = document.getElementById('file-list');
+    errorReport = document.getElementById('error-report');
 
     tzInput.addEventListener('change', (e) => handleFileSelect(e, 'tz'));
     docInput.addEventListener('change', (e) => handleFileSelect(e, 'doc'));
@@ -48,14 +50,18 @@ async function handleCompare() {
     console.log('Начало отправки файлов');
     if (!tzFile || !docFile) {
         console.error('Не выбраны оба файла');
-        alert('Пожалуйста, загрузите оба файла');
+        showError('Пожалуйста, загрузите оба файла');
         return;
     }
 
     // Проверка MIME-типов
-    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+    const allowedTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain'
+    ];
     if (!allowedTypes.includes(tzFile.type) || !allowedTypes.includes(docFile.type)) {
-        alert('Пожалуйста, загрузите файлы в формате PDF, DOCX или TXT');
+        showError('Пожалуйста, загрузите файлы в формате PDF, DOCX или TXT');
         return;
     }
 
@@ -88,9 +94,22 @@ async function handleCompare() {
         }
     } catch (error) {
         console.error('Ошибка:', error);
-        alert(error.message);
+        showError(error.message);
     } finally {
         compareButton.disabled = false;
         compareButton.textContent = 'Сравнение';
+    }
+}
+
+function showError(message) {
+    if (errorReport) {
+        errorReport.querySelector('p').textContent = message;
+        errorReport.style.display = 'block';
+    }
+}
+
+function hideError() {
+    if (errorReport) {
+        errorReport.style.display = 'none';
     }
 }

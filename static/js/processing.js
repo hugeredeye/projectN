@@ -6,7 +6,7 @@ function processComparisonResults(results) {
     // Создаем секции для разных типов результатов
     const sections = {
         matches: createResultSection('Совпадения'),
-        discrepancies: createResultSection('Расхождения'), 
+        discrepancies: createResultSection('Расхождения'),
         recommendations: createResultSection('Рекомендации')
     };
 
@@ -71,7 +71,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const viewErrorsButton = document.querySelector('.view-errors-button');
     const progressText = document.createElement('p');
     progressText.className = 'progress-text';
-    document.querySelector('.result-card').appendChild(progressText);
+    
+    // Проверяем, существует ли .result-card, прежде чем добавлять progressText
+    const resultCard = document.querySelector('.result-card');
+    if (resultCard) {
+        resultCard.appendChild(progressText);
+    }
 
     // Получаем session_id из localStorage
     const sessionId = localStorage.getItem('processing_session_id');
@@ -98,7 +103,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     progressText.textContent = 'Обработка завершена!';
                     downloadButton.style.display = 'block';
                     viewErrorsButton.style.display = 'flex';
-                    // Активируем кнопки
                     downloadButton.disabled = false;
                     viewErrorsButton.disabled = false;
                     break;
