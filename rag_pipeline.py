@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple
 import os
 import logging
 import random
+import re
 from config import settings
 from sentence_transformers import SentenceTransformer, InputExample, losses
 from torch.utils.data import DataLoader
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Промпты
 tz_extraction_prompt = PromptTemplate(
     input_variables=["text"],
-    template="Это требования к документации:\n\n{text}\n\nИзвлеки ключевые требования в виде списка блоков, каждый пункт начинай с '- '."
+    template="Это технический документ:\n\n{text}\n\nИзвлеки ТОЛЬКО конкретные требования из этого документа. Для каждого требования:\n1. Определи суть требования\n2. Преобразуй в краткую и четкую формулировку\n3. Игнорируй пояснительную информацию, примеры и комментарии\n4. Оставь только обязательные характеристики системы\n\nКаждый пункт начинай с '- ' и используй глагол 'должен'."
 )
 
 comparison_prompt = PromptTemplate(
@@ -41,6 +42,12 @@ class RAGPipeline:
         # Создаем директорию для векторной БД
         os.makedirs(settings.VECTOR_DB_PATH, exist_ok=True)
         
+        # Инициализация маркеров требований
+        self.requirement_patterns = self._init_requirement_patterns()
+        
+        # Временно отключено обучение на эталонных ТЗ для тестирования
+        logger.info("Обучение на эталонных ТЗ временно отключено для тестирования")
+        """
         # Загружаем и дообучаем на эталонных ТЗ
         reference_dir = "references"
         logger.info(f"Проверка папки с эталонными ТЗ: {reference_dir}")
@@ -52,6 +59,51 @@ class RAGPipeline:
             logger.info("Дообучение завершено, модель сохранена в custom_embeddings")
         else:
             logger.warning("Папка с эталонными ТЗ пуста или не существует, используется базовая модель")
+        """
+
+    def _init_requirement_patterns(self) -> Dict:
+        """Инициализация паттернов для определения требований"""
+        return {
+            "functional": [
+                r"(должен|должна|должны|должно)\s+\w+", 
+                r"(необходимо|следует|обязан|требуется)\s+\w+",
+                r"функция\s+", 
+                r"реализовать\s+", 
+                r"обеспечить\s+",
+                r"предусмотреть\s+",
+                r"(система|модуль|компонент|программа|приложение|интерфейс)\s+(должен|должна|должны|должно)\s+",
+                r"^\d+\.\d+\s+[А-Я]",  # Нумерованные пункты с заглавной буквы
+                r"^[А-Я][а-я]+\s+(должен|должна|должны|должно)\s+",  # Предложения с подлежащим и модальным глаголом
+                r"требуется\s+\w+",
+                r"должно\s+(быть|иметь|содержать)"
+            ],
+            "non_functional": [
+                r"производительность", 
+                r"безопасность", 
+                r"надежность",
+                r"отказоустойчивость",
+                r"эргономичность",
+                r"юзабилити",
+                r"масштабируемость",
+                r"доступность",
+                r"скорость работы",
+                r"время отклика",
+                r"удобство использования",
+                r"совместимость с"
+            ],
+            "exclusions": [
+                r"пример[:\s]+", 
+                r"например[,:\s]+", 
+                r"пояснение[:\s]+",
+                r"комментарий[:\s]+",
+                r"для справки[:\s]+",
+                r"в качестве иллюстрации",
+                r"дополнительно",
+                r"детали реализации",
+                r"прочие сведения",
+                r"(как|для) информации"
+            ]
+        }
 
     def initialize_model(self) -> None:
         """Инициализация модели через Groq API."""
@@ -110,38 +162,130 @@ class RAGPipeline:
         logger.info(f"Модель сохранена в {output_path}")
         self.embeddings = HuggingFaceEmbeddings(model_name=output_path)
 
+    def extract_paragraphs(self, text: str) -> List[str]:
+        """Разбивает текст на абзацы с учетом различных разделителей."""
+        # Разделяем текст сначала по пустым строкам
+        paragraphs = re.split(r'\n\s*\n', text)
+        
+        result = []
+        for p in paragraphs:
+            # Проверяем, содержит ли абзац нумерованные пункты
+            if re.search(r'^\d+\.', p, re.MULTILINE):
+                # Разделяем на пункты
+                subparagraphs = re.split(r'(?<=\n)(?=\d+\.)', p)
+                result.extend(subparagraphs)
+            else:
+                result.append(p)
+        
+        # Очищаем и фильтруем пустые строки
+        return [p.strip() for p in result if p.strip()]
+
+    def is_requirement(self, text: str) -> Tuple[bool, str]:
+        """Определяет, является ли текст требованием и его тип."""
+        text_lower = text.lower()
+        
+        # Проверяем сначала исключения
+        for pattern in self.requirement_patterns["exclusions"]:
+            if re.search(pattern, text_lower):
+                return False, "non_requirement"
+        
+        # Проверяем функциональные требования
+        for pattern in self.requirement_patterns["functional"]:
+            if re.search(pattern, text):
+                return True, "functional"
+        
+        # Проверяем нефункциональные требования
+        for pattern in self.requirement_patterns["non_functional"]:
+            if re.search(pattern, text_lower):
+                return True, "non_functional"
+        
+        # Эвристики для определения требований без явных маркеров
+        # 1. Короткие предложения, начинающиеся с заглавной буквы и заканчивающиеся точкой
+        if re.match(r'^[А-Я].*\.$', text) and len(text) < 200:
+            # 2. Содержащие глаголы в будущем времени или конкретные указания
+            if re.search(r'\s(будет|будут|обеспечивает|поддерживает)\s', text_lower):
+                return True, "functional"
+            # 3. Предложения с указанием характеристик и параметров
+            elif re.search(r'(с точностью|в количестве|в размере|на уровне)', text_lower):
+                return True, "non_functional"
+                
+        return False, "non_requirement"
+
+    def extract_clean_requirement(self, text: str) -> str:
+        """Извлекает суть требования, удаляя лишнюю информацию."""
+        # Удаляем комментарии в скобках
+        text = re.sub(r'\([^)]*\)', '', text)
+        # Удаляем вводные фразы
+        text = re.sub(r'^В системе |^С учетом |^При разработке |^На этапе ', '', text)
+        
+        # Если текст слишком длинный, пытаемся выделить основную часть
+        if len(text) > 200:
+            # Находим первое основное предложение с требованием
+            sentences = re.split(r'\.\s+', text)
+            for sentence in sentences:
+                for pattern in self.requirement_patterns["functional"]:
+                    if re.search(pattern, sentence):
+                        return sentence.strip() + "."
+            
+            # Если не нашли конкретное предложение, возвращаем первое предложение
+            if sentences:
+                return sentences[0].strip() + "."
+        
+        return text.strip()
+
     def split_tz_into_blocks(self, tz_content: Dict) -> Dict:
-        """Разбивает ТЗ на логические блоки."""
-        requirements = tz_content['raw_text'].split("\n")
+        """Разбивает ТЗ на логические блоки с определением требований."""
+        paragraphs = self.extract_paragraphs(tz_content['raw_text'])
         blocks = {
             "functional": [],
             "non_functional": [],
             "other": []
         }
         
-        for req in requirements:
-            req = req.strip()
-            if not req:
-                continue
-            if any(keyword in req.lower() for keyword in ["должен", "функция", "реализовать"]):
-                blocks["functional"].append(req)
-            elif any(keyword in req.lower() for keyword in ["производительность", "безопасность", "надежность"]):
-                blocks["non_functional"].append(req)
+        for paragraph in paragraphs:
+            is_req, req_type = self.is_requirement(paragraph)
+            if is_req:
+                if req_type == "functional":
+                    blocks["functional"].append(paragraph)
+                elif req_type == "non_functional":
+                    blocks["non_functional"].append(paragraph)
             else:
-                blocks["other"].append(req)
+                blocks["other"].append(paragraph)
+        
+        logger.info(f"Разбиение ТЗ: найдено {len(blocks['functional'])} функциональных и "
+                   f"{len(blocks['non_functional'])} нефункциональных требований, "
+                   f"{len(blocks['other'])} блоков дополнительной информации")
         
         return blocks
 
     def split_into_blocks(self, text: str) -> List[str]:
         """Разбивает текст на логические блоки."""
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500,  # Размер блока (можно настроить)
-            chunk_overlap=50,
-            separators=["\n\n", "\n", r"(?<=^\d+\.\s+.*$)", " "],
-            length_function=len
-        )
-        blocks = splitter.split_text(text)
-        return [block.strip() for block in blocks if block.strip()]
+        # Сначала разбиваем на абзацы
+        paragraphs = self.extract_paragraphs(text)
+        
+        # Если абзацы слишком большие, дополнительно разбиваем их
+        result = []
+        for paragraph in paragraphs:
+            # Проверяем, является ли абзац требованием
+            is_req, _ = self.is_requirement(paragraph)
+            
+            # Для требований сохраняем целостность независимо от длины
+            if is_req:
+                result.append(paragraph)
+            # Только для нетребований, которые очень длинные, применяем разбиение
+            elif len(paragraph) > 2000:
+                splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=1000,  # Увеличиваем размер чанка
+                    chunk_overlap=100,
+                    separators=["\n", ". ", r"(?<=^\d+\.\s+.*$)", " "],
+                    length_function=len
+                )
+                sub_blocks = splitter.split_text(paragraph)
+                result.extend(sub_blocks)
+            else:
+                result.append(paragraph)
+        
+        return [block.strip() for block in result if block.strip()]
 
     def load_and_process_reference_tzs(self, reference_dir: str) -> List[Dict]:
         """Загружает и обрабатывает эталонные ТЗ из директории."""
@@ -169,7 +313,11 @@ class RAGPipeline:
             if not isinstance(tz_content, dict) or not isinstance(doc_content, dict):
                 raise ValueError("Неправильный формат данных: ожидается словарь")
             
-            tz_blocks = self.split_into_blocks(tz_content['raw_text'])
+            # Получаем блоки ТЗ с учетом определения требований
+            tz_blocks_dict = self.split_tz_into_blocks(tz_content)
+            
+            # Объединяем функциональные и нефункциональные требования для векторного хранилища
+            tz_blocks = tz_blocks_dict["functional"] + tz_blocks_dict["non_functional"]
             doc_blocks = self.split_into_blocks(doc_content['raw_text'])
             
             logger.info(f"Создано блоков: ТЗ - {len(tz_blocks)}, Документация - {len(doc_blocks)}")
@@ -194,9 +342,61 @@ class RAGPipeline:
         try:
             logger.info("Извлечение требований из ТЗ...")
             tz_text = tz_content["raw_text"][:10000]
+            
+            # Сначала пробуем извлечь требования с помощью нашей собственной логики
+            tz_blocks_dict = self.split_tz_into_blocks({"raw_text": tz_text})
+            functional_reqs = [self.extract_clean_requirement(block) for block in tz_blocks_dict["functional"]]
+            non_functional_reqs = [self.extract_clean_requirement(block) for block in tz_blocks_dict["non_functional"]]
+            
+            # Объединяем и удаляем дубликаты
+            all_requirements = []
+            seen = set()
+            
+            for req in functional_reqs + non_functional_reqs:
+                # Если требования похожи (одно содержится в другом), выбираем более короткое
+                is_duplicate = False
+                for existing_req in seen:
+                    if req in existing_req or existing_req in req:
+                        is_duplicate = True
+                        break
+                
+                if not is_duplicate and len(req) > 10:  # Фильтруем слишком короткие
+                    all_requirements.append(req)
+                    seen.add(req)
+            
+            # Если наша логика нашла достаточно требований, используем их
+            if len(all_requirements) >= 3:
+                logger.info(f"Извлечено {len(all_requirements)} требований с помощью логики анализа абзацев")
+                requirements = "\n".join(f"- {block}" for block in all_requirements)
+                return requirements
+            
+            # Иначе используем LLM для извлечения требований
             requirements = self.llm.invoke(tz_extraction_prompt.format(text=tz_text)).content
-            logger.info(f"Извлечённые требования:\n{requirements}")
-            return requirements
+            logger.info(f"Извлечённые требования с помощью LLM:\n{requirements}")
+            
+            # Постобработка результатов от LLM
+            cleaned_requirements = []
+            
+            for line in requirements.split("\n"):
+                line = line.strip()
+                if line.startswith("- "):
+                    # Удаляем '-' и очищаем строку
+                    req = line[2:].strip()
+                    # Фильтруем пустые и слишком короткие
+                    if req and len(req) > 10:
+                        cleaned_requirements.append(req)
+            
+            # Удаляем возможные дубликаты еще раз
+            final_requirements = []
+            seen = set()
+            
+            for req in cleaned_requirements:
+                req_lower = req.lower()
+                if req_lower not in seen:
+                    final_requirements.append(req)
+                    seen.add(req_lower)
+            
+            return "\n".join(f"- {req}" for req in final_requirements)
         except Exception as e:
             logger.error(f"Ошибка при извлечении требований из ТЗ: {str(e)}")
             # Fallback: разбиваем на блоки и фильтруем по ключевым словам
@@ -244,10 +444,34 @@ class RAGPipeline:
                         analysis_results.append(current_requirement)
                     current_requirement = {"requirement": line.replace("- Требование:", "").strip()}
                 elif line.startswith("- Соответствует:"):
-                    status = "yes" if "да" in line.lower() else "no"
-                    current_requirement["status"] = {"status": status, "criticality": "none" if status == "yes" else "high"}
+                    status_text = line.replace("- Соответствует:", "").strip().lower()
+                    # Более гибкое определение статуса
+                    if any(word in status_text for word in ["да", "соответствует", "выполнено", "присутствует"]):
+                        status = "yes"
+                        criticality = "none"
+                    elif any(word in status_text for word in ["частично", "не полностью"]):
+                        status = "partial"
+                        criticality = "medium"
+                    else:
+                        status = "no"
+                        criticality = "high"
+                    
+                    current_requirement["status"] = {"status": status, "criticality": criticality}
                 elif line.startswith("- Причина:"):
-                    current_requirement["analysis"] = line.replace("- Причина:", "").strip()
+                    reason = line.replace("- Причина:", "").strip()
+                    current_requirement["analysis"] = reason
+                    
+                    # Дополнительная корректировка критичности на основе причины
+                    if "status" in current_requirement and current_requirement["status"]["status"] == "no":
+                        # Понижаем критичность для несущественных проблем
+                        if any(word in reason.lower() for word in ["несущественно", "некритично", "незначительно"]):
+                            current_requirement["status"]["criticality"] = "low"
+                        # Повышаем критичность для важных проблем
+                        elif any(word in reason.lower() for word in ["критично", "важно", "обязательно", "необходимо"]):
+                            current_requirement["status"]["criticality"] = "high"
+                        else:
+                            current_requirement["status"]["criticality"] = "medium"
+            
             if current_requirement:
                 analysis_results.append(current_requirement)
 
