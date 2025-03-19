@@ -6,11 +6,11 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Backgroun
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict
+from typing import Dict, List
 from config import settings
 from rag_pipeline import generate_analysis, explain_point
 from database import get_db, UploadedFile, ComparisonSession, db_manager, AsyncSessionLocal, create_tables, engine
-from sqlalchemy import select
+from sqlalchemy import select, JSON
 import uuid
 import json
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.middleware("http")
 async def add_charset_middleware(request, call_next):
     response = await call_next(request)
@@ -48,20 +49,24 @@ async def add_charset_middleware(request, call_next):
         response.headers["Content-Type"] = "text/html; charset=utf-8"
     return response
 
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     with open("static/index.html", encoding='utf-8') as f:
         return f.read()
 
+
 @app.get("/processing")
 async def processing_page():
     return FileResponse("static/processing.html")
+
 
 @app.on_event("startup")
 async def startup_event():
     await create_tables(engine)
     asyncio.create_task(cleanup_task())
     asyncio.create_task(calculate_storage_stats())
+
 
 async def calculate_md5(file_path: str) -> str:
     md5_hash = hashlib.md5()
@@ -70,11 +75,13 @@ async def calculate_md5(file_path: str) -> str:
             md5_hash.update(chunk)
     return md5_hash.hexdigest()
 
+
 def validate_document_size(file: UploadFile, max_size: int = 10 * 1024 * 1024) -> bool:
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)
     return file_size <= max_size
+
 
 @app.post("/upload")
 async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
@@ -88,10 +95,10 @@ async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
 
         content = await file.read()
         logger.info(f"Получен файл {file.filename}, размер: {len(content)} байт")
-        
+
         with open(file_path, "wb") as buffer:
             buffer.write(content)
-        
+
         if not os.path.exists(file_path):
             logger.error(f"Файл не был сохранён: {file_path}")
             raise HTTPException(status_code=500, detail="Не удалось сохранить файл")
@@ -148,6 +155,7 @@ async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
             os.remove(file_path)  # Удаляем файл, если он был создан, но произошла ошибка
         raise HTTPException(status_code=400, detail=str(e))
 
+
 async def read_file_content(file_id: int, db: AsyncSession = Depends(get_db)) -> Dict:
     query = select(UploadedFile).where(UploadedFile.id == file_id)
     result = await db.execute(query)
@@ -177,6 +185,7 @@ async def read_file_content(file_id: int, db: AsyncSession = Depends(get_db)) ->
         "raw_text": content,
         "requirements": content.split("\n")
     }
+
 
 @app.post("/compare")
 async def compare_documents(
@@ -221,29 +230,31 @@ async def compare_documents(
         logger.error(f"Ошибка при сравнении: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
-async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime, db: AsyncSession):
+
+async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime,
+                                 db: AsyncSession):
     try:
-        logger.info(f"Начало обработки сессии {session_id}")
+        logger.info(f"Обработка сессии {session_id}")
         tz_content = await read_file_content(tz_file_id, db)
         doc_content = await read_file_content(doc_file_id, db)
         analysis_result = generate_analysis(tz_content, doc_content)
+
+        if not isinstance(analysis_result, list) or not all(isinstance(item, dict) for item in analysis_result):
+            raise ValueError("Некорректный формат результатов анализа")
 
         query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
         result = await db.execute(query)
         session = result.scalar_one_or_none()
 
         if session:
-            end_time = datetime.utcnow()
-            processing_time = int((end_time - start_time).total_seconds())
             session.status = "completed"
-            session.completed_at = end_time
-            session.processing_time = processing_time
-            session.result = analysis_result
+            session.completed_at = datetime.utcnow()
+            session.processing_time = (datetime.utcnow() - start_time).seconds
+            session.result = json.dumps(analysis_result, ensure_ascii=False)
             await db.commit()
-
-        logger.info(f"Анализ документов завершен: {session_id}")
+            logger.info(f"Сессия {session_id} завершена")
     except Exception as e:
-        logger.error(f"Ошибка при анализе документов: {str(e)}")
+        logger.error(f"Ошибка обработки: {str(e)}")
         query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
         result = await db.execute(query)
         session = result.scalar_one_or_none()
@@ -251,6 +262,7 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
             session.status = "error"
             session.error_message = str(e)
             await db.commit()
+
 
 @app.get("/status/{session_id}")
 async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
@@ -262,18 +274,23 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
         if not session:
             raise HTTPException(status_code=404, detail="Сессия не найдена")
 
-        if session.status == "completed" and session.result:
-            report = []
-            for idx, res in enumerate(session.result, 1):
-                report.append({
-                    "№": idx,
-                    "Требование": res["requirement"],
-                    "Статус": res["status"]["status"],
-                    "Критичность": res["status"]["criticality"],
-                    "Анализ": res["analysis"]
-                })
-        else:
-            report = None
+        result_data = json.loads(session.result) if isinstance(session.result, str) else session.result
+
+        report = []
+        if result_data:
+            for idx, res in enumerate(result_data, 1):
+                try:
+                    if not isinstance(res, dict):
+                        raise ValueError("Некорректный формат данных")
+                    report.append({
+                        "№": idx,
+                        "Требование": res.get("requirement", "N/A"),
+                        "Статус": res.get("status", {}).get("status", "не определен"),
+                        "Критичность": res.get("status", {}).get("criticality", "не определена"),
+                        "Анализ": res.get("analysis", "")
+                    })
+                except Exception as e:
+                    logger.warning(f"Ошибка обработки элемента {idx}: {str(e)}")
 
         return {
             "status": session.status,
@@ -284,77 +301,9 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
             "error_message": session.error_message
         }
     except Exception as e:
-        logger.error(f"Ошибка при получении статуса: {str(e)}")
+        logger.error(f"Ошибка статуса: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/download-report/{session_id}")
-async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
-    try:
-        query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
-        result = await db.execute(query)
-        session = result.scalar_one_or_none()
-
-        if not session:
-            raise HTTPException(status_code=404, detail="Сессия не найдена")
-
-        if session.status != "completed":
-            raise HTTPException(status_code=400, detail="Отчет еще не готов")
-
-        # Создаем PDF отчет
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import letter
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        import io
-
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
-        styles = getSampleStyleSheet()
-        elements = []
-
-        # Заголовок
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=24,
-            spaceAfter=30
-        )
-        elements.append(Paragraph("Отчет о сравнении документов", title_style))
-
-        # Добавляем результаты
-        for idx, res in enumerate(session.result, 1):
-            # Заголовок пункта
-            elements.append(Paragraph(f"Пункт {idx}: {res['requirement']}", styles['Heading2']))
-            
-            # Статус и критичность
-            status_color = colors.green if res['status']['status'] == 'соответствует' else colors.red
-            status_style = ParagraphStyle(
-                'Status',
-                parent=styles['Normal'],
-                textColor=status_color
-            )
-            elements.append(Paragraph(f"Статус: {res['status']['status']}", status_style))
-            elements.append(Paragraph(f"Критичность: {res['status']['criticality']}", styles['Normal']))
-            
-            # Анализ
-            elements.append(Paragraph("Анализ:", styles['Heading3']))
-            elements.append(Paragraph(res['analysis'], styles['Normal']))
-            elements.append(Spacer(1, 20))
-
-        # Создаем PDF
-        doc.build(elements)
-        buffer.seek(0)
-
-        return StreamingResponse(
-            buffer,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename=report_{session_id}.pdf"
-            }
-        )
-    except Exception as e:
-        logger.error(f"Ошибка при создании отчета: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/errors/{session_id}")
 async def get_errors(session_id: str, db: AsyncSession = Depends(get_db)):
@@ -369,21 +318,39 @@ async def get_errors(session_id: str, db: AsyncSession = Depends(get_db)):
         if session.status != "completed":
             raise HTTPException(status_code=400, detail="Отчет еще не готов")
 
-        # Фильтруем только ошибки и несоответствия
+        # Десериализация JSON-строки в список словарей
+        try:
+            errors_data = json.loads(session.result) if isinstance(session.result, str) else session.result
+        except json.JSONDecodeError:
+            errors_data = []
+
+        # Проверка типа данных и структуры
+        if not isinstance(errors_data, list):
+            errors_data = []
+
         errors = []
-        for res in session.result:
-            if res['status']['status'] != 'соответствует':
-                errors.append({
-                    "requirement": res['requirement'],
-                    "status": res['status']['status'],
-                    "criticality": res['status']['criticality'],
-                    "analysis": res['analysis']
-                })
+        for res in errors_data:
+            try:
+                # Проверяем структуру элемента
+                if isinstance(res, dict) and 'status' in res:
+                    status_info = res.get('status', {})
+                    if isinstance(status_info, dict):
+                        if status_info.get('status') != 'соответствует':
+                            errors.append({
+                                "requirement": res.get('requirement', 'N/A'),
+                                "status": status_info.get('status', 'не определен'),
+                                "criticality": status_info.get('criticality', 'не определена'),
+                                "analysis": res.get('analysis', '')
+                            })
+            except Exception as e:
+                logger.warning(f"Ошибка обработки элемента: {str(e)}")
+                continue
 
         return {"errors": errors}
     except Exception as e:
         logger.error(f"Ошибка при получении ошибок: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/explain")
 async def explain_document_point(point: str):
@@ -392,6 +359,7 @@ async def explain_document_point(point: str):
         return JSONResponse(content={"point": point, "explanation": explanation})
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.get("/stats")
 async def get_stats():
@@ -402,6 +370,7 @@ async def get_stats():
     except Exception as e:
         logger.error(f"Ошибка при получении статистики: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.delete("/files/{file_id}")
 async def delete_file(file_id: int, db: AsyncSession = Depends(get_db)):
@@ -423,6 +392,8 @@ async def delete_file(file_id: int, db: AsyncSession = Depends(get_db)):
         logger.error(f"Ошибка при удалении файла: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
