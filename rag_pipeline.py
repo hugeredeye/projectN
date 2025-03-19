@@ -19,6 +19,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+requirement_pattern = re.compile(r"[*-]\s*Требование:\s*(.+)$")
+status_pattern = re.compile(r"[*-]\s*Соответствует:\s*(.+)$")
+reason_pattern = re.compile(r"[*-]\s*Причина:\s*(.+)$")
+
 # Промпты
 tz_extraction_prompt = PromptTemplate(
     input_variables=["text"],
@@ -439,28 +443,50 @@ class RAGPipeline:
             current_requirement = {}
             for line in lines:
                 line = line.strip()
-                if line.startswith("- Требование:"):
-                    if current_requirement:
+                if line.startswith("* Requirement:"):
+                    if current_requirement:  # Сохраняем предыдущее требование, если оно есть
                         analysis_results.append(current_requirement)
-                    current_requirement = {"requirement": line.replace("- Требование:", "").strip()}
-                elif line.startswith("- Соответствует:"):
-                    status_text = line.replace("- Соответствует:", "").strip().lower()
-                    # Более гибкое определение статуса
-                    if any(word in status_text for word in ["да", "соответствует", "выполнено", "присутствует"]):
+                    current_requirement = {"requirement": line.replace("* Requirement:", "").strip()}
+                elif line.startswith("* Corresponds:"):
+                    status_text = line.replace("* Corresponds:", "").strip().lower()
+                    # Определяем статус и критичность
+                    if "да" in status_text:
                         status = "yes"
                         criticality = "none"
-                    elif any(word in status_text for word in ["частично", "не полностью"]):
+                    elif "частично" in status_text:
                         status = "partial"
                         criticality = "medium"
                     else:
                         status = "no"
                         criticality = "high"
-                    
                     current_requirement["status"] = {"status": status, "criticality": criticality}
-                elif line.startswith("- Причина:"):
-                    reason = line.replace("- Причина:", "").strip()
+                elif line.startswith("* Reason:"):
+                    reason = line.replace("* Reason:", "").strip()
                     current_requirement["analysis"] = reason
-                    
+
+            for line in lines:
+                line = line.strip()
+                if line.startswith("* Требование:"):
+                    if current_requirement:  # Сохраняем предыдущее требование, если оно есть
+                        analysis_results.append(current_requirement)
+                    current_requirement = {"requirement": line.replace("* Требование:", "").strip()}
+                elif line.startswith("* Соответствует:"):
+                    status_text = line.replace("* Соответствует:", "").strip().lower()
+                    # Определяем статус и критичность
+                    if "да" in status_text:
+                        status = "yes"
+                        criticality = "none"
+                    elif "частично" in status_text:
+                        status = "partial"
+                        criticality = "medium"
+                    else:
+                        status = "no"
+                        criticality = "high"
+                    current_requirement["status"] = {"status": status, "criticality": criticality}
+                elif line.startswith("* Причина:"):
+                    reason = line.replace("* Причина:", "").strip()
+                    current_requirement["analysis"] = reason            
+                                    
                     # Дополнительная корректировка критичности на основе причины
                     if "status" in current_requirement and current_requirement["status"]["status"] == "no":
                         # Понижаем критичность для несущественных проблем

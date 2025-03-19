@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     
     # Настройки LLM
     GROQ_API_KEY: str  # Обязательное поле, без значения по умолчанию
-    MODEL_NAME: str = "mixtral-8x7b-32768"  # Более вероятная модель для Groq
-    MAX_TOKENS: int = 32768
+    MODEL_NAME: str = "llama3-70b-8192"  # Более вероятная модель для Groq
+    MAX_TOKENS: int = 6000
     TEMPERATURE: float = 0.7
     
     # Настройки базы данных векторов
