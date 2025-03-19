@@ -18,11 +18,12 @@ class Settings(BaseSettings):
     ALLOWED_EXTENSIONS: List[str] = [".pdf", ".docx", ".txt"]
     
     # Настройки базы данных
-    DATABASE_URL: str = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./document_analyzer.db")
+    DATABASE_URL: str = "sqlite+aiosqlite:///./document_analyzer.db"  # Значение по умолчанию
+    
     # Настройки LLM
-    GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
-    MODEL_NAME: str = "deepseek-r1-distill-llama-70b"  # DeepSeek через Groq
-    MAX_TOKENS: int = 32768  # Максимальная длина контекста
+    GROQ_API_KEY: str  # Обязательное поле, без значения по умолчанию
+    MODEL_NAME: str = "mixtral-8x7b-32768"  # Более вероятная модель для Groq
+    MAX_TOKENS: int = 32768
     TEMPERATURE: float = 0.7
     
     # Настройки базы данных векторов
@@ -30,5 +31,17 @@ class Settings(BaseSettings):
     
     class Config:
         case_sensitive = True
+        env_file = ".env"  # Автоматическая загрузка из .env
+        env_file_encoding = "utf-8"
 
+# Создание экземпляра настроек
 settings = Settings()
+
+# Добавьте отладку
+print(f"Текущая директория: {os.getcwd()}")
+print(f"Найден ли .env: {os.path.exists('.env')}")
+print(f"GROQ_API_KEY из окружения: {os.getenv('GROQ_API_KEY')}")
+print(f"GROQ_API_KEY из settings: {settings.GROQ_API_KEY}")
+
+if not settings.GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY не установлен. Укажите его в переменных окружения или в файле .env")
