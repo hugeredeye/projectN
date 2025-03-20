@@ -126,10 +126,36 @@ document.addEventListener('DOMContentLoaded', function() {
     // Обработчик кнопки скачивания
     downloadButton.addEventListener('click', async function() {
         try {
-            window.location.href = `/download-report/${sessionId}`;
+            downloadButton.disabled = true;
+            downloadButton.textContent = 'Скачивание...';
+            
+            const response = await fetch(`/download-report/${sessionId}`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Ошибка при скачивании отчета');
+            }
+            
+            const blob = await response.blob();
+            if (blob.size === 0) {
+                throw new Error('Получен пустой файл');
+            }
+            
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `report_${sessionId}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            downloadButton.textContent = 'Скачать отчет с исправлениями';
         } catch (error) {
-            alert('Ошибка при скачивании отчета');
             console.error('Ошибка:', error);
+            alert('Ошибка при скачивании отчета: ' + error.message);
+            downloadButton.textContent = 'Скачать отчет с исправлениями';
+        } finally {
+            downloadButton.disabled = false;
         }
     });
 

@@ -324,7 +324,33 @@ h1 {
 }
 
 .download-button {
-    margin-bottom: 20px; /* Отступ снизу для первой кнопки */
+    width: 100%;
+    padding: 16px;
+    margin: 20px 0;
+    border: none;
+    border-radius: 16px;
+    background-color: #E7C7D3;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s;
+    font-weight: 500;
+    display: none;
+}
+
+.download-button:hover {
+    background-color: #D1A5B1;
+    transform: translateY(-2px);
+}
+
+.download-button:active {
+    transform: translateY(0);
+}
+
+.download-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .report-container {
