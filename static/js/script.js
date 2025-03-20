@@ -21,29 +21,48 @@ document.addEventListener('DOMContentLoaded', function() {
     const themeToggle = document.getElementById('theme-toggle');
     if (!themeToggle) {
         console.error('Кнопка переключения темы не найдена!');
-        return;
-    }
-
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-        document.body.classList.add('dark-theme');
-        themeToggle.textContent = 'Светлая тема';
     } else {
-        themeToggle.textContent = 'Темная тема';
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-theme');
+            themeToggle.textContent = 'Светлая тема';
+        } else {
+            themeToggle.textContent = 'Темная тема';
+        }
+
+        themeToggle.addEventListener('click', function() {
+            const body = document.body;
+            if (body.classList.contains('dark-theme')) {
+                body.classList.remove('dark-theme');
+                themeToggle.textContent = 'Темная тема';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.classList.add('dark-theme');
+                themeToggle.textContent = 'Светлая тема';
+                localStorage.setItem('theme', 'dark');
+            }
+        });
     }
 
-    themeToggle.addEventListener('click', function() {
-        const body = document.body;
-        if (body.classList.contains('dark-theme')) {
-            body.classList.remove('dark-theme');
-            themeToggle.textContent = 'Темная тема';
-            localStorage.setItem('theme', 'light');
-        } else {
-            body.classList.add('dark-theme');
-            themeToggle.textContent = 'Светлая тема';
-            localStorage.setItem('theme', 'dark');
-        }
-    });
+    // Инициализация кнопки для отображения изображения
+    const imageToggleButton = document.getElementById('image-toggle-button');
+    const imageModal = document.getElementById('image-modal');
+
+    if (!imageToggleButton || !imageModal) {
+        console.error('Кнопка или модальное окно для изображения не найдены!');
+    } else {
+        // Показать изображение при клике на кнопку
+        imageToggleButton.addEventListener('click', function() {
+            imageModal.style.display = 'flex';
+        });
+
+        // Скрыть изображение при клике вне области изображения
+        imageModal.addEventListener('click', function(e) {
+            if (e.target === imageModal) {
+                imageModal.style.display = 'none';
+            }
+        });
+    }
 });
 
 function handleFileSelect(event, type) {
