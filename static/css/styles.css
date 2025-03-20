@@ -1,3 +1,61 @@
+/* Определение переменных для светлой и темной тем */
+:root {
+    --background-color: #E7C7D3;
+    --card-background: white;
+    --text-color: #000000;
+    --secondary-text-color: #666666;
+    --button-background: #E7C7D3;
+    --button-hover: #D1A5B1;
+    --shadow-color: rgba(0, 0, 0, 0.08);
+    --match-bg: #e8f5e9;
+    --match-color: #28a745;
+    --discrepancy-bg: #f8d7da;
+    --discrepancy-color: #dc3545;
+    --recommendation-bg: #e3f2fd;
+    --recommendation-color: #007bff;
+    --points-list-bg: #f8f8f8;
+    --error-border: pink;
+    --scrollbar-thumb: #ccc;
+    --scrollbar-track: #f1f1f1;
+    --error-report-bg: #f9f9f9;
+    --modal-overlay: rgba(0, 0, 0, 0.5);
+    --modal-content-border: #ddd;
+    --status-success-bg: #e8f5e9;
+    --status-error-bg: #f8d7da;
+    --back-button-bg: #E5C1CD;
+    --theme-toggle-bg: white;           /* Белый фон для светлой темы */
+    --theme-toggle-text: #F5C6D6;       /* Розовый текст для светлой темы */
+    --button-background: #F5C6D6;       /* Определение розового цвета, если еще не задано */
+}
+
+.dark-theme {
+    --background-color: #2E2E2E;
+    --card-background: #3C3C3C;
+    --text-color: #FFFFFF;
+    --secondary-text-color: #B0B0B0;
+    --button-background: #555555;
+    --button-hover: #777777;
+    --shadow-color: rgba(0, 0, 0, 0.5);
+    --match-bg: #1a3c34;
+    --match-color: #34c759;
+    --discrepancy-bg: #4a2c31;
+    --discrepancy-color: #ff6b6b;
+    --recommendation-bg: #2a3f5e;
+    --recommendation-color: #4dabf7;
+    --points-list-bg: #3C3C3C;
+    --error-border: #ff6b6b;
+    --scrollbar-thumb: #888;
+    --scrollbar-track: #444;
+    --error-report-bg: #444;
+    --modal-overlay: rgba(0, 0, 0, 0.8);
+    --modal-content-border: #666;
+    --status-success-bg: #1a3c34;
+    --status-error-bg: #4a2c31;
+    --back-button-bg: #666;
+    --theme-toggle-bg: #333333;         /* Темный фон для темной темы */
+    --theme-toggle-text: white;         /* Белый текст для темной темы */
+}
+
 /* Основные стили для body */
 body {
     margin: 0;
@@ -6,8 +64,9 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: #E7C7D3;
+    background-color: var(--background-color);
     font-family: Arial, sans-serif;
+    color: var(--text-color);
 }
 
 /* Контейнер для основного контента */
@@ -20,10 +79,10 @@ body {
 
 /* Карточка для загрузки файлов */
 .upload-card {
-    background: white;
+    background: var(--card-background);
     border-radius: 24px;
     padding: 40px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 20px var(--shadow-color);
     text-align: center;
 }
 
@@ -33,7 +92,7 @@ h1 {
     margin: 0 0 40px 0;
     text-align: center;
     font-weight: 500;
-    color: #000000;
+    color: var(--text-color);
 }
 
 /* Кнопки загрузки */
@@ -43,8 +102,8 @@ h1 {
     margin-bottom: 16px;
     border: none;
     border-radius: 16px;
-    background-color: #E7C7D3;
-    color: white;
+    background-color: var(--button-background); /* Светло-розовый фон */
+    color: white; /* Белый текст */
     font-size: 16px;
     cursor: pointer;
     transition: background-color 0.2s, transform 0.2s;
@@ -56,7 +115,7 @@ h1 {
 }
 
 .upload-button:hover {
-    background-color: #D1A5B1;
+    background-color: var(--button-hover);
     transform: translateY(-2px);
 }
 
@@ -72,12 +131,12 @@ h1 {
 
 .uploaded-files p {
     margin: 0 0 10px 0;
-    color: #666666;
+    color: var(--secondary-text-color);
     font-size: 14px;
 }
 
 #file-list {
-    color: #666666;
+    color: var(--secondary-text-color);
     font-size: 14px;
     line-height: 1.5;
 }
@@ -90,8 +149,8 @@ h1 {
     padding: 16px 24px;
     border: none;
     border-radius: 16px;
-    background-color: #E7C7D3;
-    color: white;
+    background-color: var(--button-background); /* Светло-розовый фон */
+    color: white; /* Белый текст */
     font-size: 16px;
     font-weight: 500;
     cursor: pointer;
@@ -102,7 +161,7 @@ h1 {
 }
 
 .compare-button:hover {
-    background-color: #D1A5B1;
+    background-color: var(--button-hover);
     transform: translateY(-2px);
 }
 
@@ -120,9 +179,11 @@ h1 {
 .result-card {
     position: relative;
     padding: 20px;
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    background: var(--card-background);
+    border-radius: 24px;
+    box-shadow: 0 4px 20px var(--shadow-color);
+    max-width: 800px;
+    margin: 20px auto;
 }
 
 /* Секции с результатами */
@@ -132,20 +193,25 @@ h1 {
 
 .result-section h2 {
     font-size: 20px;
-    color: #333;
+    color: var(--text-color);
     margin-bottom: 15px;
     font-weight: normal;
 }
 
+/* Список пунктов */
 .points-list {
-    background: #f8f8f8;
+    background: var(--points-list-bg);
     border-radius: 10px;
     padding: 20px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+    text-align: left;
 }
 
 .points-list p {
     margin: 10px 0;
-    color: #666;
+    color: var(--secondary-text-color);
     line-height: 1.5;
 }
 
@@ -157,15 +223,15 @@ h1 {
     padding: 15px 30px;
     border: none;
     border-radius: 25px;
-    background-color: #E5C1CD;
-    color: white;
+    background-color: var(--back-button-bg);
+    color: var(--text-color);
     font-size: 16px;
     cursor: pointer;
     transition: background-color 0.3s, transform 0.2s;
 }
 
 .back-button:hover {
-    background-color: #D1A5B1;
+    background-color: var(--button-hover);
     transform: translateY(-2px);
 }
 
@@ -175,22 +241,22 @@ h1 {
 
 /* Стили для разных типов пунктов */
 .match {
-    color: #28a745;
-    background-color: #e8f5e9;
+    color: var(--match-color);
+    background-color: var(--match-bg);
     padding: 8px;
     border-radius: 8px;
 }
 
 .discrepancy {
-    color: #dc3545;
-    background-color: #f8d7da;
+    color: var(--discrepancy-color);
+    background-color: var(--discrepancy-bg);
     padding: 8px;
     border-radius: 8px;
 }
 
 .recommendation {
-    color: #007bff;
-    background-color: #e3f2fd;
+    color: var(--recommendation-color);
+    background-color: var(--recommendation-bg);
     padding: 8px;
     border-radius: 8px;
 }
@@ -198,7 +264,7 @@ h1 {
 /* Текст прогресса */
 .progress-text {
     margin-top: 20px;
-    color: #666;
+    color: var(--secondary-text-color);
     font-size: 14px;
     transition: opacity 0.3s;
 }
@@ -216,6 +282,206 @@ h1 {
 
 [disabled] {
     pointer-events: none;
+}
+
+/* Контейнер для ответов */
+.response-container {
+    background: var(--card-background);
+    border-radius: 24px;
+    box-shadow: 0 4px 20px var(--shadow-color);
+    padding: 20px;
+    margin: 20px;
+}
+
+/* Внутренний контейнер с прокруткой */
+.response-content {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+/* Стилизация скроллбара */
+.response-content::-webkit-scrollbar,
+.points-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.response-content::-webkit-scrollbar-thumb,
+.points-list::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+.response-content::-webkit-scrollbar-track,
+.points-list::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+/* Кнопки скачивания и просмотра ошибок */
+.download-button,
+.view-errors-button {
+    background-color: var(--button-background); /* Светло-розовый фон */
+    color: white; /* Белый текст */
+    border: none;
+    border-radius: 16px;
+    padding: 16px 24px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.download-button:hover,
+.view-errors-button:hover {
+    background-color: var(--button-hover);
+    transform: translateY(-2px);
+}
+
+.download-button:active,
+.view-errors-button:active {
+    transform: translateY(0);
+}
+
+.download-button {
+    margin-bottom: 20px;
+}
+
+/* Контейнер отчета */
+.report-container {
+    width: 100%;
+    padding: 20px;
+    text-align: left;
+    line-height: 1.5;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Стили для модального окна */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--modal-overlay);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: var(--card-background);
+    border-radius: 10px;
+    padding: 20px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 8px var(--shadow-color);
+    border: 1px solid var(--modal-content-border);
+}
+
+.errors-list {
+    margin-top: 10px;
+}
+
+.error-item {
+    margin-bottom: 15px;
+    padding: 10px;
+    border: 1px solid var(--modal-content-border);
+    border-radius: 5px;
+}
+
+.error-item h3 {
+    margin: 0 0 5px;
+    font-size: 16px;
+    color: var(--text-color);
+}
+
+.error-item p {
+    margin: 5px 0;
+    font-size: 14px;
+    color: var(--secondary-text-color);
+}
+
+/* Кнопка закрытия модального окна */
+.close-button {
+    background-color: var(--button-background);
+    color: var(--text-color);
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.close-button:hover {
+    background-color: var(--button-hover);
+}
+
+/* Отчет об ошибках */
+.error-report {
+    background: var(--card-background);
+    border: 2px solid var(--error-border);
+    padding: 10px;
+    margin-top: 20px;
+    display: none;
+}
+
+.error-report-scrollable {
+    margin-top: 20px;
+    padding: 10px;
+    border: 2px solid var(--error-border);
+    border-radius: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: var(--error-report-bg);
+}
+
+.error-content p {
+    margin: 5px 0;
+    color: var(--secondary-text-color);
+}
+
+/* Статусы */
+.status.success {
+    color: var(--match-color);
+    background-color: var(--status-success-bg);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.status.error {
+    color: var(--discrepancy-color);
+    background-color: var(--status-error-bg);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+/* Переключатель темы */
+.theme-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    background-color: var(--theme-toggle-bg);
+    color: var(--theme-toggle-text);
+    border: none;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+    z-index: 1000;
+}
+
+.theme-toggle:hover {
+    background-color: #f0e6f0;          /* Светло-розовый фон при наведении в светлой теме */
+    color: #333333;                     /* Темный текст для контраста */
+}
+
+.dark-theme .theme-toggle:hover {
+    background-color: #555555;          /* Светлее серый фон при наведении в темной теме */
+    color: white;                       /* Белый текст сохраняется */
 }
 
 /* Адаптивность */
@@ -243,260 +509,26 @@ h1 {
         padding: 12px 20px;
         font-size: 14px;
     }
-}
 
-.error-report {
-    background-color: white;
-    border: 2px solid pink;
-    padding: 10px;
-    margin-top: 20px;
-    display: none;
-}
-
-.error-report-scrollable {
-    margin-top: 20px;
-    padding: 10px;
-    border: 2px solid pink;
-    border-radius: 8px;
-    max-height: 200px;
-    overflow-y: auto;
-    background-color: #f9f9f9;
-}
-
-.error-content p {
-    margin: 5px 0;
-}
-
-/* Контейнер для ответов */
-.response-container {
-    background-color: white;
-    border-radius: 24px; /* Закругленные углы, как у .upload-card */
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); /* Тень, как у .upload-card */
-    padding: 20px;
-    margin: 20px;
-}
-
-/* Внутренний контейнер с прокруткой */
-.response-content {
-    max-height: 400px; /* Ограничение высоты, подстрой под свои нужды */
-    overflow-y: auto; /* Включаем вертикальную прокрутку */
-    padding-right: 10px; /* Отступ для скроллбара */
-}
-
-/* Опционально: стилизация скроллбара */
-.response-content::-webkit-scrollbar {
-    width: 8px;
-}
-
-.response-content::-webkit-scrollbar-thumb {
-    background-color: #ccc;
-    border-radius: 4px;
-}
-
-.response-content::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-
-.download-button,
-.view-errors-button {
-    background-color: #E7C7D3; /* Розовый цвет фона */
-    color: white; /* Белый текст для контраста */
-    border: none; /* Убираем обводку */
-    border-radius: 16px; /* Закругленные углы */
-    padding: 16px 24px; /* Внутренние отступы */
-    font-size: 16px; /* Размер шрифта */
-    font-weight: 500; /* Толщина шрифта */
-    cursor: pointer; /* Курсор при наведении */
-    transition: background-color 0.2s, transform 0.2s; /* Плавные эффекты */
-}
-
-/* Эффекты при наведении */
-.download-button:hover,
-.view-errors-button:hover {
-    background-color: #D1A5B1; /* Более темный розовый */
-    transform: translateY(-2px); /* Легкий подъем кнопки */
-}
-
-/* Эффект при нажатии */
-.download-button:active,
-.view-errors-button:active {
-    transform: translateY(0); /* Возврат в исходное положение */
-}
-
-.download-button {
-    margin-bottom: 20px; /* Отступ снизу для первой кнопки */
-}
-
-.report-container {
-    width: 100%;
-    padding: 20px;
-    text-align: left;
-    line-height: 1.5;
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-/* Стили для общего контейнера результатов */
-.result-card {
-    max-width: 800px; /* Ограничиваем ширину для удобства чтения */
-    margin: 0 auto; /* Центрируем на странице */
-}
-
-/* Стили для контейнера ответа */
-.response-container {
-    background-color: white; /* Белый фон */
-    border-radius: 10px; /* Закругленные углы */
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Легкая тень для глубины */
-    padding: 20px; /* Внутренние отступы */
-    margin: 20px 0; /* Внешние отступы */
-}
-
-/* Стили для содержимого с прокруткой */
-.response-content {
-    max-height: 400px; /* Максимальная высота, после которой появляется прокрутка */
-    overflow-y: auto; /* Включаем вертикальную прокрутку */
-    padding-right: 10px; /* Отступ справа для скроллбара */
-}
-
-/* Стили для секций результатов */
-.result-section {
-    margin-bottom: 20px; /* Отступ между секциями */
-}
-
-/* Заголовки внутри секций */
-.result-section h2 {
-    color: #333; /* Темный цвет для контраста */
-    margin-bottom: 10px; /* Отступ под заголовком */
-}
-
-/* Стили для списков пунктов */
-.points-list {
-    text-align: left; /* Выравнивание текста слева */
-}
-
-/* Стили для параграфов внутри списков */
-.points-list p {
-    margin: 10px 0; /* Отступы между пунктами */
-    color: #333; /* Темный цвет текста */
-    line-height: 1.5; /* Увеличенный межстрочный интервал для читаемости */
-}
-
-@media (max-width: 600px) {
     .result-card {
-        max-width: 100%; /* Полная ширина на маленьких экранах */
-        margin: 0 10px;
+        max-width: 100%;
+        margin: 10px;
+        padding: 15px;
     }
 
     .response-container {
-        padding: 10px; /* Уменьшаем отступы */
+        padding: 10px;
     }
 
     .response-content {
-        max-height: 300px; /* Уменьшаем высоту для мобильных */
-    }
-}
-
-/* Стили для модального окна */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
-
-.modal-content {
-    background-color: white;
-    border-radius: 10px;
-    padding: 20px;
-    max-width: 600px;
-    width: 100%;
-    max-height: 80vh;
-    overflow-y: auto;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.errors-list {
-    margin-top: 10px;
-}
-
-.error-item {
-    margin-bottom: 15px;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-}
-
-.error-item h3 {
-    margin: 0 0 5px;
-    font-size: 16px;
-}
-
-.error-item p {
-    margin: 5px 0;
-    font-size: 14px;
-}
-
-.close-button {
-    background-color: #E7C7D3;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 5px;
-    cursor: pointer;
-    margin-top: 10px;
-}
-
-.close-button:hover {
-    background-color: #D1A5B1;
-}
-
-/* Стили для контейнера результатов */
-.result-card {
-    background-color: white;
-    border-radius: 24px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    padding: 20px;
-    margin: 20px;
-}
-
-.points-list {
-    max-height: 400px;
-    overflow-y: auto;
-    padding-right: 10px;
-}
-
-/* Адаптивность */
-@media (max-width: 600px) {
-    .modal-content {
-        max-width: 90%;
-    }
-
-    .result-card {
-        margin: 10px;
-        padding: 15px;
+        max-height: 300px;
     }
 
     .points-list {
         max-height: 300px;
     }
-}
 
-.status.success {
-    color: #28a745; /* Более мягкий зеленый */
-    background-color: #e8f5e9; /* Светлый зеленый фон */
-    padding: 4px 8px;
-    border-radius: 4px;
-}
-
-.status.error {
-    color: #dc3545; /* Более мягкий красный */
-    background-color: #f8d7da; /* Светлый красный фон */
-    padding: 4px 8px;
-    border-radius: 4px;
+    .modal-content {
+        max-width: 90%;
+    }
 }

@@ -1,11 +1,37 @@
 document.addEventListener('DOMContentLoaded', async function() {
+    // Инициализация переключения темы
+    const themeToggle = document.getElementById('theme-toggle');
+    if (!themeToggle) {
+        console.error('Кнопка переключения темы не найдена!');
+    } else {
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-theme');
+            themeToggle.textContent = 'Светлая тема';
+        } else {
+            themeToggle.textContent = 'Темная тема';
+        }
+
+        themeToggle.addEventListener('click', function() {
+            const body = document.body;
+            if (body.classList.contains('dark-theme')) {
+                body.classList.remove('dark-theme');
+                themeToggle.textContent = 'Темная тема';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.classList.add('dark-theme');
+                themeToggle.textContent = 'Светлая тема';
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+    }
+
     try {
         const response = await fetch('/results');
         const data = await response.json();
         displayResults(data);
     } catch (error) {
         console.error('Ошибка при получении результатов:', error);
-        // Отображаем мок-данные в случае ошибки
         const mockResults = {
             matching_points: [
                 "Пункт 1.1: Требования к авторизации полностью соответствуют",
@@ -29,13 +55,11 @@ function displayResults(results) {
     const discrepancies = document.getElementById('discrepancies');
     const recommendations = document.getElementById('recommendations');
 
-    // Проверка на существование элементов
     if (!matchingPoints || !discrepancies || !recommendations) {
         console.error('Один из элементов для отображения результатов не найден');
         return;
     }
 
-    // Отображаем соответствующие пункты
     results.matching_points.forEach(point => {
         const p = document.createElement('p');
         p.className = 'match';
@@ -43,7 +67,6 @@ function displayResults(results) {
         matchingPoints.appendChild(p);
     });
 
-    // Отображаем несоответствия
     results.discrepancies.forEach(point => {
         const p = document.createElement('p');
         p.className = 'discrepancy';
@@ -51,7 +74,6 @@ function displayResults(results) {
         discrepancies.appendChild(p);
     });
 
-    // Отображаем рекомендации
     results.recommendations.forEach(point => {
         const p = document.createElement('p');
         p.className = 'recommendation';

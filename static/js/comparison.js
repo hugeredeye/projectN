@@ -1,3 +1,64 @@
+function processComparisonResults(results) {
+    const resultContainer = document.createElement('div');
+    resultContainer.className = 'result-card';
+
+    const sections = {
+        matches: createResultSection('Совпадения'),
+        discrepancies: createResultSection('Расхождения'),
+        recommendations: createResultSection('Рекомендации')
+    };
+
+    results.forEach(result => {
+        const point = document.createElement('p');
+        point.className = result.type;
+        point.textContent = result.text;
+        
+        switch(result.type) {
+            case 'match':
+                sections.matches.querySelector('.points-list').appendChild(point);
+                break;
+            case 'discrepancy':
+                sections.discrepancies.querySelector('.points-list').appendChild(point);
+                break;
+            case 'recommendation':
+                sections.recommendations.querySelector('.points-list').appendChild(point);
+                break;
+        }
+    });
+
+    Object.values(sections).forEach(section => {
+        resultContainer.appendChild(section);
+    });
+
+    const backButton = document.createElement('button');
+    backButton.className = 'back-button';
+    backButton.textContent = 'Назад';
+    backButton.onclick = () => {
+        resultContainer.remove();
+        document.querySelector('.container').style.display = 'block';
+    };
+    resultContainer.appendChild(backButton);
+
+    document.querySelector('.container').style.display = 'none';
+    document.body.appendChild(resultContainer);
+}
+
+function createResultSection(title) {
+    const section = document.createElement('div');
+    section.className = 'result-section';
+    
+    const heading = document.createElement('h2');
+    heading.textContent = title;
+    
+    const pointsList = document.createElement('div');
+    pointsList.className = 'points-list';
+    
+    section.appendChild(heading);
+    section.appendChild(pointsList);
+    
+    return section;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const downloadButton = document.querySelector('.download-button');
     const viewErrorsButton = document.querySelector('.view-errors-button');
@@ -19,29 +80,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const themeToggle = document.getElementById('theme-toggle');
     if (!themeToggle) {
         console.error('Кнопка переключения темы не найдена!');
-        return;
-    }
-
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-        document.body.classList.add('dark-theme');
-        themeToggle.textContent = 'Светлая тема';
     } else {
-        themeToggle.textContent = 'Темная тема';
-    }
-
-    themeToggle.addEventListener('click', function() {
-        const body = document.body;
-        if (body.classList.contains('dark-theme')) {
-            body.classList.remove('dark-theme');
-            themeToggle.textContent = 'Темная тема';
-            localStorage.setItem('theme', 'light');
-        } else {
-            body.classList.add('dark-theme');
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-theme');
             themeToggle.textContent = 'Светлая тема';
-            localStorage.setItem('theme', 'dark');
+        } else {
+            themeToggle.textContent = 'Темная тема';
         }
-    });
+
+        themeToggle.addEventListener('click', function() {
+            const body = document.body;
+            if (body.classList.contains('dark-theme')) {
+                body.classList.remove('dark-theme');
+                themeToggle.textContent = 'Темная тема';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.classList.add('dark-theme');
+                themeToggle.textContent = 'Светлая тема';
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+    }
 
     async function checkStatus() {
         try {

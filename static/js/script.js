@@ -16,6 +16,34 @@ document.addEventListener('DOMContentLoaded', function() {
     tzInput.addEventListener('change', (e) => handleFileSelect(e, 'tz'));
     docInput.addEventListener('change', (e) => handleFileSelect(e, 'doc'));
     compareButton.addEventListener('click', handleCompare);
+
+    // Инициализация переключения темы
+    const themeToggle = document.getElementById('theme-toggle');
+    if (!themeToggle) {
+        console.error('Кнопка переключения темы не найдена!');
+        return;
+    }
+
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+        document.body.classList.add('dark-theme');
+        themeToggle.textContent = 'Светлая тема';
+    } else {
+        themeToggle.textContent = 'Темная тема';
+    }
+
+    themeToggle.addEventListener('click', function() {
+        const body = document.body;
+        if (body.classList.contains('dark-theme')) {
+            body.classList.remove('dark-theme');
+            themeToggle.textContent = 'Темная тема';
+            localStorage.setItem('theme', 'light');
+        } else {
+            body.classList.add('dark-theme');
+            themeToggle.textContent = 'Светлая тема';
+            localStorage.setItem('theme', 'dark');
+        }
+    });
 });
 
 function handleFileSelect(event, type) {
@@ -54,7 +82,6 @@ async function handleCompare() {
         return;
     }
 
-    // Проверка MIME-типов
     const allowedTypes = [
         'application/pdf',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
