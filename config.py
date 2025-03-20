@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     
     # Настройки LLM
     GROQ_API_KEY: str  # Обязательное поле, без значения по умолчанию
-    MODEL_NAME: str = "llama3-70b-8192"  # Более вероятная модель для Groq
+    MODEL_NAME: str = "deepseek-r1-distill-llama-70b"  # Более вероятная модель для Groq
     MAX_TOKENS: int = 6000
     TEMPERATURE: float = 0.7
     
