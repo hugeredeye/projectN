@@ -126,36 +126,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Обработчик кнопки скачивания
     downloadButton.addEventListener('click', async function() {
         try {
-            downloadButton.disabled = true;
-            downloadButton.textContent = 'Скачивание...';
-            
-            const response = await fetch(`/download-report/${sessionId}`);
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Ошибка при скачивании отчета');
-            }
-            
-            const blob = await response.blob();
-            if (blob.size === 0) {
-                throw new Error('Получен пустой файл');
-            }
-            
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `report_${sessionId}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            
-            downloadButton.textContent = 'Скачать отчет с исправлениями';
+            window.location.href = `/download-report/${sessionId}`;
         } catch (error) {
+            alert('Ошибка при скачивании отчета');
             console.error('Ошибка:', error);
-            alert('Ошибка при скачивании отчета: ' + error.message);
-            downloadButton.textContent = 'Скачать отчет с исправлениями';
-        } finally {
-            downloadButton.disabled = false;
         }
     });
 
@@ -178,7 +152,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         ${data.errors.map(error => `
                             <div class="error-item">
                                 <h3>${error.requirement}</h3>
-                                <p class="status ${error.status === 'соответствует' ? 'success' : 'error'}">
+                                <p class="status ${error.status === 'соответствует ТЗ' ? 'success' : 'error'}">
                                     Статус: ${error.status}
                                 </p>
                                 <p>Критичность: ${error.criticality}</p>

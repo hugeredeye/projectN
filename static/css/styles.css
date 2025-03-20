@@ -324,33 +324,7 @@ h1 {
 }
 
 .download-button {
-    width: 100%;
-    padding: 16px;
-    margin: 20px 0;
-    border: none;
-    border-radius: 16px;
-    background-color: #E7C7D3;
-    color: white;
-    font-size: 16px;
-    cursor: pointer;
-    transition: background-color 0.2s, transform 0.2s;
-    font-weight: 500;
-    display: none;
-}
-
-.download-button:hover {
-    background-color: #D1A5B1;
-    transform: translateY(-2px);
-}
-
-.download-button:active {
-    transform: translateY(0);
-}
-
-.download-button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
+    margin-bottom: 20px; /* Отступ снизу для первой кнопки */
 }
 
 .report-container {
@@ -468,14 +442,6 @@ h1 {
     font-size: 14px;
 }
 
-.status.success {
-    color: green;
-}
-
-.status.error {
-    color: red;
-}
-
 .close-button {
     background-color: #E7C7D3;
     color: white;
@@ -519,4 +485,18 @@ h1 {
     .points-list {
         max-height: 300px;
     }
+}
+
+.status.success {
+    color: #28a745; /* Более мягкий зеленый */
+    background-color: #e8f5e9; /* Светлый зеленый фон */
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.status.error {
+    color: #dc3545; /* Более мягкий красный */
+    background-color: #f8d7da; /* Светлый красный фон */
+    padding: 4px 8px;
+    border-radius: 4px;
 }

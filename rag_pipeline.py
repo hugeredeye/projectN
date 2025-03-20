@@ -146,7 +146,6 @@ class RAGPipeline:
             return fallback_result
 
     def analyze_documents(self, tz_vectorstore: FAISS, doc_vectorstore: FAISS, tz_content: Dict) -> List[Dict]:
-        """Анализ документов и поиск несоответствий с помощью LLM."""
         try:
             logger.info("Начало анализа документов...")
             requirements = self.extract_tz_requirements(tz_content)
@@ -170,7 +169,6 @@ class RAGPipeline:
                 if line.startswith("- Требование:"):
                     if current_requirement:
                         analysis_results.append(current_requirement)
-                    # Убираем квадратные скобки корректно
                     req_text = line.replace("- Требование:", "").strip()
                     if req_text.startswith("[") and req_text.endswith("]"):
                         req_text = req_text[1:-1]
@@ -179,8 +177,9 @@ class RAGPipeline:
                     status_text = line.replace("- Соответствует:", "").strip()
                     if status_text.startswith("[") and status_text.endswith("]"):
                         status_text = status_text[1:-1]
-                    status = "yes" if status_text.lower() == "да" else "no"
-                    criticality = "none" if status == "yes" else "high"
+                    # Изменяем статус на нужный текст
+                    status = "соответствует ТЗ" if status_text.lower() == "да" else "не соответствует ТЗ"
+                    criticality = "нет" if status == "соответствует ТЗ" else "высокая"
                     current_requirement["status"] = {"status": status, "criticality": criticality}
                 elif line.startswith("- Причина:"):
                     reason = line.replace("- Причина:", "").strip()
@@ -201,9 +200,12 @@ class RAGPipeline:
             fallback_result = []
             for req in req_blocks:
                 matches = any(req.lower() in doc.lower() for doc in doc_blocks)
+                # Используем нужный текст и в fallback
+                status = "соответствует ТЗ" if matches else "не соответствует ТЗ"
+                criticality = "нет" if matches else "высокая"
                 fallback_result.append({
                     "requirement": req,
-                    "status": {"status": "yes" if matches else "no", "criticality": "none" if matches else "high"},
+                    "status": {"status": status, "criticality": criticality},
                     "analysis": "Найдено в документации" if matches else "Не найдено в документации"
                 })
             logger.info("Использован fallback в analyze_documents")
