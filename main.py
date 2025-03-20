@@ -345,11 +345,15 @@ async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
         doc.build(elements)
         buffer.seek(0)
 
+        logger.info(f"PDF отчет успешно сгенерирован для сессии {session_id}")
+        
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"attachment; filename=report_{session_id}.pdf"
+                "Content-Disposition": f"attachment; filename=report_{session_id}.pdf",
+                "Content-Type": "application/pdf",
+                "Cache-Control": "no-cache"
             }
         )
     except Exception as e:
