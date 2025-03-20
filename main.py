@@ -302,60 +302,111 @@ async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
 
         # Создаем PDF отчет
         from reportlab.lib import colors
-        from reportlab.lib.pagesizes import letter
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        from reportlab.lib.units import inch
+        from reportlab.pdfbase import cidfonts
         import io
 
+        # Регистрируем шрифт с поддержкой кириллицы
+        pdfmetrics.registerFont(cidfonts.UnicodeCIDFont('STSong-Light'))
+
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=72,
+            leftMargin=72,
+            topMargin=72,
+            bottomMargin=72,
+            encoding='utf-8'
+        )
+
         styles = getSampleStyleSheet()
+
+        def sanitize_text(text):
+            """Подготовка текста для PDF."""
+            if not isinstance(text, str):
+                return str(text)
+            # Преобразуем текст в UTF-8 и обратно для нормализации
+            return text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+
+        def create_style(base_style_name, font_size=12, space_after=10, alignment=0):
+            return ParagraphStyle(
+                name=f'Custom{base_style_name}',
+                parent=styles[base_style_name],
+                fontName='STSong-Light',
+                fontSize=font_size,
+                spaceAfter=space_after,
+                alignment=alignment,
+                encoding='utf-8',
+                leading=font_size * 1.2
+            )
+
+        # Создаем стили
+        normal_style = create_style('Normal')
+        heading1_style = create_style('Heading1', font_size=24, space_after=30, alignment=1)
+        heading2_style = create_style('Heading2', font_size=18, space_after=20)
+        heading3_style = create_style('Heading3', font_size=14, space_after=15)
+
         elements = []
 
-        # Заголовок
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=24,
-            spaceAfter=30
-        )
-        elements.append(Paragraph("Отчет о сравнении документов", title_style))
+        # Добавляем заголовок
+        elements.append(Paragraph(sanitize_text("Отчет о сравнении документов"), heading1_style))
+        elements.append(Spacer(1, 30))
 
-        # Добавляем результаты
+        # Добавляем результаты анализа
         for idx, res in enumerate(session.result, 1):
-            # Заголовок пункта
-            elements.append(Paragraph(f"Пункт {idx}: {res['requirement']}", styles['Heading2']))
+            try:
+                # Заголовок пункта
+                requirement_text = sanitize_text(f"Пункт {idx}: {res['requirement']}")
+                elements.append(Paragraph(requirement_text, heading2_style))
+                
+                # Статус и критичность
+                status_color = colors.green if res['status']['status'] == 'соответствует ТЗ' else colors.red
+                status_style = ParagraphStyle(
+                    'Status',
+                    parent=normal_style,
+                    textColor=status_color,
+                    fontName='STSong-Light',
+                    fontSize=12,
+                    spaceAfter=10,
+                    encoding='utf-8'
+                )
+                
+                elements.append(Paragraph(sanitize_text(f"Статус: {res['status']['status']}"), status_style))
+                elements.append(Paragraph(sanitize_text(f"Критичность: {res['status']['criticality']}"), normal_style))
+                
+                # Анализ
+                elements.append(Paragraph(sanitize_text("Анализ:"), heading3_style))
+                elements.append(Paragraph(sanitize_text(res['analysis']), normal_style))
+                elements.append(Spacer(1, 20))
+            except Exception as e:
+                logger.error(f"Ошибка при обработке пункта {idx}: {str(e)}")
+                continue
+
+        try:
+            # Создаем PDF
+            doc.build(elements)
+            buffer.seek(0)
+
+            logger.info(f"PDF отчет успешно сгенерирован для сессии {session_id}")
             
-            # Статус и критичность
-            status_color = colors.green if res['status']['status'] == 'соответствует ТЗ' else colors.red
-            status_style = ParagraphStyle(
-                'Status',
-                parent=styles['Normal'],
-                textColor=status_color
+            return StreamingResponse(
+                buffer,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'attachment; filename="report_{session_id}.pdf"',
+                    "Content-Type": "application/pdf; charset=utf-8",
+                    "Cache-Control": "no-cache"
+                }
             )
-            elements.append(Paragraph(f"Статус: {res['status']['status']}", status_style))
-            elements.append(Paragraph(f"Критичность: {res['status']['criticality']}", styles['Normal']))
-            
-            # Анализ
-            elements.append(Paragraph("Анализ:", styles['Heading3']))
-            elements.append(Paragraph(res['analysis'], styles['Normal']))
-            elements.append(Spacer(1, 20))
-
-        # Создаем PDF
-        doc.build(elements)
-        buffer.seek(0)
-
-        logger.info(f"PDF отчет успешно сгенерирован для сессии {session_id}")
-        
-        return StreamingResponse(
-            buffer,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename=report_{session_id}.pdf",
-                "Content-Type": "application/pdf",
-                "Cache-Control": "no-cache"
-            }
-        )
+        except Exception as e:
+            logger.error(f"Ошибка при создании PDF: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.error(f"Ошибка при создании отчета: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
