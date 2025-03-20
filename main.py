@@ -327,7 +327,7 @@ async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
             elements.append(Paragraph(f"Пункт {idx}: {res['requirement']}", styles['Heading2']))
             
             # Статус и критичность
-            status_color = colors.green if res['status']['status'] == 'соответствует' else colors.red
+            status_color = colors.green if res['status']['status'] == 'соответствует ТЗ' else colors.red
             status_style = ParagraphStyle(
                 'Status',
                 parent=styles['Normal'],
@@ -369,29 +369,20 @@ async def get_errors(session_id: str, db: AsyncSession = Depends(get_db)):
         if session.status != "completed":
             raise HTTPException(status_code=400, detail="Отчет еще не готов")
 
-        # Фильтруем только ошибки и несоответствия
+        # Формируем список всех пунктов (соответствия и несоответствия)
         errors = []
         for res in session.result:
-            if res['status']['status'] != 'соответствует':
-                errors.append({
-                    "requirement": res['requirement'],
-                    "status": res['status']['status'],
-                    "criticality": res['status']['criticality'],
-                    "analysis": res['analysis']
-                })
+            errors.append({
+                "requirement": res['requirement'],
+                "status": res['status']['status'],
+                "criticality": res['status']['criticality'],
+                "analysis": res['analysis']
+            })
 
         return {"errors": errors}
     except Exception as e:
         logger.error(f"Ошибка при получении ошибок: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/explain")
-async def explain_document_point(point: str):
-    try:
-        explanation = explain_point(point)
-        return JSONResponse(content={"point": point, "explanation": explanation})
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/stats")
 async def get_stats():

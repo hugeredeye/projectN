@@ -442,14 +442,6 @@ h1 {
     font-size: 14px;
 }
 
-.status.success {
-    color: green;
-}
-
-.status.error {
-    color: red;
-}
-
 .close-button {
     background-color: #E7C7D3;
     color: white;
@@ -493,4 +485,18 @@ h1 {
     .points-list {
         max-height: 300px;
     }
+}
+
+.status.success {
+    color: #28a745; /* Более мягкий зеленый */
+    background-color: #e8f5e9; /* Светлый зеленый фон */
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.status.error {
+    color: #dc3545; /* Более мягкий красный */
+    background-color: #f8d7da; /* Светлый красный фон */
+    padding: 4px 8px;
+    border-radius: 4px;
 }

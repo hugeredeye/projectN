@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         ${data.errors.map(error => `
                             <div class="error-item">
                                 <h3>${error.requirement}</h3>
-                                <p class="status ${error.status === 'соответствует' ? 'success' : 'error'}">
+                                <p class="status ${error.status === 'соответствует ТЗ' ? 'success' : 'error'}">
                                     Статус: ${error.status}
                                 </p>
                                 <p>Критичность: ${error.criticality}</p>
