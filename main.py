@@ -1,5 +1,4 @@
 import os
-import time
 import logging
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, BackgroundTasks
@@ -13,8 +12,6 @@ from rag_pipeline import generate_analysis, explain_point
 from database import get_db, UploadedFile, ComparisonSession, db_manager, AsyncSessionLocal, create_tables, engine
 from sqlalchemy import select
 import uuid
-import json
-from sqlalchemy.ext.asyncio import AsyncSession
 import hashlib
 from datetime import datetime
 from tasks import cleanup_task, calculate_storage_stats
@@ -77,7 +74,7 @@ def validate_document_size(file: UploadFile, max_size: int = 10 * 1024 * 1024) -
     return file_size <= max_size
 
 @app.post("/upload")
-async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
+async def upload_file(file: UploadFile, db: AsyncSessionLocal = Depends(get_db)):
     try:
         if not validate_document_size(file):
             raise HTTPException(status_code=413, detail="Размер файла превышает допустимый предел")
@@ -97,6 +94,12 @@ async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
 
         if existing_file:
             os.remove(file_path)
+            os.remove(file_path)
+
+            existing_file.stored_name = stored_name
+            await db.commit()
+            await db.refresh(existing_file)
+            logger.info(f"Обновлён путь для дубликата: {file_path}, ID: {existing_file.id}")
             return {
                 "status": "success",
                 "file_id": existing_file.id,
@@ -134,6 +137,11 @@ async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
 
 async def read_file_content(file_id: int, db: AsyncSession = Depends(get_db)) -> Dict:
     """Чтение содержимого файла из базы данных по его ID."""
+    if os.path.exists(file_path):
+            os.remove(file_path)
+    raise HTTPException(status_code=400, detail=str(e))
+
+async def read_file_content(file_id: int, db: AsyncSessionLocal = Depends(get_db)) -> Dict:
     query = select(UploadedFile).where(UploadedFile.id == file_id)
     result = await db.execute(query)
     file = result.scalar_one_or_none()
@@ -161,13 +169,20 @@ async def read_file_content(file_id: int, db: AsyncSession = Depends(get_db)) ->
     except Exception as e:
         logger.error(f"Ошибка при чтении файла {file_path}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка при чтении файла: {str(e)}")
+    preview = content[:500] + "..." if len(content) > 500 else content
+    logger.info(f"Прочитанный текст из файла {file.original_name} (ID: {file_id}): {preview}")
+
+    return {
+        "raw_text": content,
+        "requirements": content.split("\n")
+
 
 @app.post("/compare")
 async def compare_documents(
         background_tasks: BackgroundTasks,
         tz_file: UploadFile = File(...),
         project_file: UploadFile = File(...),
-        db: AsyncSession = Depends(get_db)
+        db: AsyncSessionLocal = Depends(get_db)
 ):
     try:
         start_time = datetime.utcnow()
@@ -205,7 +220,7 @@ async def compare_documents(
         logger.error(f"Ошибка при сравнении: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
-async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime, db: AsyncSession):
+async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime, db: AsyncSessionLocal):
     try:
         tz_content = await read_file_content(tz_file_id, db)
         doc_content = await read_file_content(doc_file_id, db)
@@ -236,7 +251,7 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
             await db.commit()
 
 @app.get("/status/{session_id}")
-async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
+async def get_status(session_id: str, db: AsyncSessionLocal = Depends(get_db)):
     try:
         query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
         result = await db.execute(query)
@@ -249,12 +264,23 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
             # Форматируем отчет
             report = []
             for idx, res in enumerate(session.result, 1):
+                # Если результат — просто строка в "requirement", задаём значения по умолчанию
+                requirement = res.get("requirement", "Не указано")
+                status_dict = res.get("status", {})
+                analysis = res.get("analysis", "Анализ отсутствует")
+                if isinstance(status_dict, dict):
+                    status_value = status_dict.get("status", "неизвестно")
+                    criticality_value = status_dict.get("criticality", "неизвестно")
+                else:
+                    # Если status отсутствует или не словарь, определяем по содержимому requirement
+                    status_value = "соответствует ТЗ" if "правильно" in requirement.lower() else "не соответствует ТЗ"
+                    criticality_value = "нет" if status_value == "соответствует ТЗ" else "высокая"
                 report.append({
                     "№": idx,
-                    "Требование": res["requirement"],
-                    "Статус": res["status"]["status"],
-                    "Критичность": res["status"]["criticality"],
-                    "Анализ": res["analysis"]
+                    "Требование": requirement,
+                    "Статус": status_value,
+                    "Критичность": criticality_value,
+                    "Анализ": analysis
                 })
         else:
             report = None
@@ -279,6 +305,97 @@ async def explain_document_point(point: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+async def explain_document_point(point: str):
+    try:
+        explanation = explain_point(point)
+        return JSONResponse(content={"point": point, "explanation": explanation})
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+async def explain_requirement(requirement: Dict[str, str]):
+    try:
+        point = requirement.get("requirement")
+        if not point:
+            raise HTTPException(status_code=400, detail="Требование не указано")
+        explanation = explain_point(point)
+        return {"explanation": explanation}
+    except Exception as e:
+        logger.error(f"Ошибка при пояснении: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/download-report/{session_id}")
+async def download_report(session_id: str, db: AsyncSessionLocal = Depends(get_db)):
+    try:
+        query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
+        result = await db.execute(query)
+        session = result.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Сессия не найдена")
+
+        if session.status != "completed":
+            raise HTTPException(status_code=400, detail="Отчет еще не готов")
+
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        import io
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        styles = getSampleStyleSheet()
+        elements = []
+
+        title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=24, spaceAfter=30)
+        elements.append(Paragraph("Отчет о сравнении документов", title_style))
+
+        for idx, res in enumerate(session.result, 1):
+            elements.append(Paragraph(f"Пункт {idx}: {res['requirement']}", styles['Heading2']))
+            status_color = colors.green if res['status']['status'] == 'соответствует ТЗ' else colors.red
+            status_style = ParagraphStyle('Status', parent=styles['Normal'], textColor=status_color)
+            elements.append(Paragraph(f"Статус: {res['status']['status']}", status_style))
+            elements.append(Paragraph(f"Критичность: {res['status']['criticality']}", styles['Normal']))
+            elements.append(Paragraph("Анализ:", styles['Heading3']))
+            elements.append(Paragraph(res['analysis'], styles['Normal']))
+            elements.append(Spacer(1, 20))
+
+        doc.build(elements)
+        buffer.seek(0)
+
+        logger.info(f"PDF отчет сгенерирован для сессии {session_id}")
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=report_{session_id}.pdf",
+                "Content-Type": "application/pdf",
+                "Cache-Control": "no-cache"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Ошибка при создании отчета: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/errors/{session_id}")
+async def get_errors(session_id: str, db: AsyncSessionLocal = Depends(get_db)):
+    try:
+        query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
+        result = await db.execute(query)
+        session = result.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Сессия не найдена")
+
+        if session.status != "completed":
+            raise HTTPException(status_code=400, detail="Отчет еще не готов")
+
+        errors = [{"requirement": res['requirement'], "status": res['status']['status'], 
+                   "criticality": res['status']['criticality'], "analysis": res['analysis']} 
+                  for res in session.result]
+        return {"errors": errors}
+    except Exception as e:
+        logger.error(f"Ошибка при получении ошибок: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 @app.get("/stats")
 async def get_stats():
     try:
@@ -290,7 +407,7 @@ async def get_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/files/{file_id}")
-async def delete_file(file_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_file(file_id: int, db: AsyncSessionLocal = Depends(get_db)):
     try:
         query = select(UploadedFile).where(UploadedFile.id == file_id)
         result = await db.execute(query)
