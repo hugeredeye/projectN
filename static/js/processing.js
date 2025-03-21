@@ -56,7 +56,7 @@ async function checkStatus() {
         switch (data.status) {
             case 'processing':
                 progressText.textContent = `Обработка...`;
-                responseContent.textContent = 'Мы шаманим над отчетом';
+                responseContent.textContent = 'Ваш отчет в процессе обработки.';
                 resultCardHeader.textContent = 'Идет составление отчета'; // Обновляем текст в <h1>
                 downloadButton.style.display = 'none';
                 viewErrorsButton.style.display = 'none';
@@ -66,7 +66,7 @@ async function checkStatus() {
             case 'completed':
                 resultCardHeader.textContent = 'Составление отчета завершено!'; // Обновляем текст в <h1>
                 progressText.textContent = 'Обработка завершена!';
-                responseContent.textContent = 'Мы дошаманили Ваш отчет!';
+                responseContent.textContent = 'Ваш отчет готов к просмотру!';
                 downloadButton.style.display = 'block';
                 viewErrorsButton.style.display = 'flex';
                 downloadButton.disabled = false;
@@ -75,7 +75,7 @@ async function checkStatus() {
 
             case 'error':
                 resultCardHeader.textContent = 'Ошибка при составлении отчета'; // Обновляем текст в <h1>
-                responseContent.textContent = 'Мы ненашаманили отчет';
+                responseContent.textContent = 'Ошибка создания отчета';
                 downloadButton.style.display = 'none';
                 viewErrorsButton.style.display = 'none';
                 break;

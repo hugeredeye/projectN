@@ -307,6 +307,7 @@ async def explain_requirement(request: Dict[str, str], db: AsyncSession = Depend
         logger.error(f"Ошибка при получении пояснения: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка при обработке запроса: {str(e)}")
 
+
 @app.get("/download-report/{session_id}")
 async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
     try:
@@ -328,11 +329,15 @@ async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
         from reportlab.lib.units import inch
-        from reportlab.pdfbase import cidfonts
         import io
 
-        # Регистрируем шрифт с поддержкой кириллицы
-        pdfmetrics.registerFont(cidfonts.UnicodeCIDFont('STSong-Light'))
+        # Регистрируем шрифт Times New Roman
+        try:
+            # Укажите путь к файлу Times New Roman (например, 'static/fonts/times.ttf')
+            pdfmetrics.registerFont(TTFont('TimesNewRoman', 'static/fonts/times.ttf'))
+        except Exception as e:
+            logger.error(f"Ошибка регистрации шрифта: {str(e)}")
+            raise HTTPException(status_code=500, detail="Ошибка регистрации шрифта")
 
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
@@ -351,14 +356,13 @@ async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
             """Подготовка текста для PDF."""
             if not isinstance(text, str):
                 return str(text)
-            # Преобразуем текст в UTF-8 и обратно для нормализации
-            return text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+            return text
 
         def create_style(base_style_name, font_size=12, space_after=10, alignment=0):
             return ParagraphStyle(
                 name=f'Custom{base_style_name}',
                 parent=styles[base_style_name],
-                fontName='STSong-Light',
+                fontName='TimesNewRoman',
                 fontSize=font_size,
                 spaceAfter=space_after,
                 alignment=alignment,
@@ -384,22 +388,22 @@ async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
                 # Заголовок пункта
                 requirement_text = sanitize_text(f"Пункт {idx}: {res['requirement']}")
                 elements.append(Paragraph(requirement_text, heading2_style))
-                
+
                 # Статус и критичность
                 status_color = colors.green if res['status']['status'] == 'соответствует ТЗ' else colors.red
                 status_style = ParagraphStyle(
                     'Status',
                     parent=normal_style,
                     textColor=status_color,
-                    fontName='STSong-Light',
+                    fontName='TimesNewRoman',
                     fontSize=12,
                     spaceAfter=10,
                     encoding='utf-8'
                 )
-                
+
                 elements.append(Paragraph(sanitize_text(f"Статус: {res['status']['status']}"), status_style))
                 elements.append(Paragraph(sanitize_text(f"Критичность: {res['status']['criticality']}"), normal_style))
-                
+
                 # Анализ
                 elements.append(Paragraph(sanitize_text("Анализ:"), heading3_style))
                 elements.append(Paragraph(sanitize_text(res['analysis']), normal_style))
@@ -414,7 +418,7 @@ async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
             buffer.seek(0)
 
             logger.info(f"PDF отчет успешно сгенерирован для сессии {session_id}")
-            
+
             return StreamingResponse(
                 buffer,
                 media_type="application/pdf",
