@@ -43,42 +43,56 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    async function checkStatus() {
-        try {
-            const response = await fetch(`/status/${sessionId}`);
-            const data = await response.json();
+async function checkStatus() {
+    try {
+        const response = await fetch(`/status/${sessionId}`);
+        const data = await response.json();
 
-            switch (data.status) {
-                case 'processing':
-                    progressText.textContent = `Обработка...`;
-                    downloadButton.style.display = 'none';
-                    viewErrorsButton.style.display = 'none';
-                    setTimeout(checkStatus, 1000);
-                    break;
+        // Получаем элементы
+        const responseContent = document.querySelector('.response-content');
+        const resultCard = document.querySelector('.result-card');
+        const resultCardHeader = resultCard.querySelector('h1'); // Находим <h1> внутри .result-card
 
-                case 'completed':
-                    progressText.textContent = 'Обработка завершена!';
-                    downloadButton.style.display = 'block';
-                    viewErrorsButton.style.display = 'flex';
-                    downloadButton.disabled = false;
-                    viewErrorsButton.disabled = false;
-                    break;
+        switch (data.status) {
+            case 'processing':
+                progressText.textContent = `Обработка...`;
+                responseContent.textContent = 'Мы шаманим над отчетом';
+                resultCardHeader.textContent = 'Идет составление отчета'; // Обновляем текст в <h1>
+                downloadButton.style.display = 'none';
+                viewErrorsButton.style.display = 'none';
+                setTimeout(checkStatus, 1000);
+                break;
 
-                case 'error':
-                    progressText.textContent = `Ошибка: ${data.error_message}`;
-                    downloadButton.style.display = 'none';
-                    viewErrorsButton.style.display = 'none';
-                    break;
+            case 'completed':
+                resultCardHeader.textContent = 'Составление отчета завершено!'; // Обновляем текст в <h1>
+                progressText.textContent = 'Обработка завершена!';
+                responseContent.textContent = 'Мы дошаманили Ваш отчет!';
+                downloadButton.style.display = 'block';
+                viewErrorsButton.style.display = 'flex';
+                downloadButton.disabled = false;
+                viewErrorsButton.disabled = false;
+                break;
 
-                default:
-                    progressText.textContent = 'Неизвестный статус обработки';
-                    break;
-            }
-        } catch (error) {
-            progressText.textContent = 'Ошибка при проверке статуса';
-            console.error('Ошибка:', error);
+            case 'error':
+                resultCardHeader.textContent = 'Ошибка при составлении отчета'; // Обновляем текст в <h1>
+                responseContent.textContent = 'Мы ненашаманили отчет';
+                downloadButton.style.display = 'none';
+                viewErrorsButton.style.display = 'none';
+                break;
+
+            default:
+                progressText.textContent = 'Неизвестный статус обработки';
+                resultCardHeader.textContent = 'Неизвестный статус'; // Обновляем текст в <h1>
+                break;
         }
+    } catch (error) {
+        console.error('Ошибка при проверке статуса:', error);
+        const responseContent = document.querySelector('.response-content');
+        const resultCardHeader = document.querySelector('.result-card h1');
+        responseContent.textContent = 'Ошибка при проверке статуса обработки';
+        resultCardHeader.textContent = 'Ошибка при обработке'; // Обновляем текст в <h1> при ошибке
     }
+}
 
     downloadButton.addEventListener('click', async function() {
         try {
