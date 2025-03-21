@@ -286,6 +286,26 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
     except Exception as e:
         logger.error(f"Ошибка при получении статуса: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/explain")
+async def explain_requirement(request: Dict[str, str], db: AsyncSession = Depends(get_db)):
+    """Эндпоинт для получения пояснений по конкретному требованию."""
+    try:
+        requirement = request.get("requirement")
+        if not requirement:
+            raise HTTPException(status_code=400, detail="Требование не указано")
+
+        # Запрашиваем пояснение через функцию explain_point из rag_pipeline
+        explanation = explain_point(requirement)
+        logger.info(f"Пояснение для требования '{requirement}': {explanation}")
+
+        return JSONResponse(content={
+            "requirement": requirement,
+            "explanation": explanation
+        })
+    except Exception as e:
+        logger.error(f"Ошибка при получении пояснения: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка при обработке запроса: {str(e)}")
 
 @app.get("/download-report/{session_id}")
 async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):

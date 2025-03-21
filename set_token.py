@@ -56,7 +56,7 @@ def run_app_with_token():
 class Settings:
     GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
     MODEL_NAME = "llama3-70b-8192"  # Явно задаём правильную модель
-    TEMPERATURE = 0.7
+    TEMPERATURE = 0
     MAX_TOKENS = 8192
     VECTOR_DB_PATH = "./vector_db"
 

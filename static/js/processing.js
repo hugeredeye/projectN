@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             switch (data.status) {
                 case 'processing':
-                    progressText.textContent = `Обработка: ${data.progress}%`;
+                    progressText.textContent = `Обработка...`;
                     downloadButton.style.display = 'none';
                     viewErrorsButton.style.display = 'none';
                     setTimeout(checkStatus, 1000);
@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;
 
                 case 'error':
-                    progressText.textContent = `Ошибка: ${data.error}`;
+                    progressText.textContent = `Ошибка: ${data.error_message}`;
                     downloadButton.style.display = 'none';
                     viewErrorsButton.style.display = 'none';
                     break;
@@ -111,6 +111,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </p>
                                 <p>Критичность: ${error.criticality}</p>
                                 <p>Анализ: ${error.analysis}</p>
+                                <button class="explain-button" data-requirement="${error.requirement}">Пояснить</button>
                             </div>
                         `).join('')}
                     </div>
@@ -128,6 +129,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (e.target === modal) {
                     modal.remove();
                 }
+            });
+
+            // Добавляем обработчик для кнопок "Пояснить"
+            modal.querySelectorAll('.explain-button').forEach(button => {
+                button.addEventListener('click', async function() {
+                    const requirement = this.getAttribute('data-requirement');
+                    try {
+                        const response = await fetch('/explain', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ requirement: requirement })
+                        });
+                        if (!response.ok) {
+                            throw new Error('Ошибка при получении пояснения');
+                        }
+                        const data = await response.json();
+                        alert(data.explanation);
+                    } catch (error) {
+                        alert('Ошибка при получении пояснения');
+                        console.error('Ошибка:', error);
+                    }
+                });
             });
         } catch (error) {
             alert('Ошибка при получении отчета об ошибках');
