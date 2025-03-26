@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build: .
@@ -12,6 +10,7 @@ services:
       - ./vector_db:/app/vector_db
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/document_analyzer
+      - OS_TYPE=windows
     env_file:
       - .env  # Загружаем .env с хоста
     depends_on:
@@ -25,6 +24,8 @@ services:
     dns:
       - 8.8.8.8  # Google DNS
       - 1.1.1.1  # Cloudflare DNS
+    # Оптимизации для Windows
+    command: sh -c "export WINDOWS_MODE=true && /app/start.sh"
 
   db:
     image: postgres:15
@@ -53,4 +54,4 @@ services:
       - db
 
 volumes:
-  postgres_data:
+  postgres_data: 
