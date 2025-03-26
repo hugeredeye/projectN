@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # Настройки LLM
     GROQ_API_KEY: str  # Обязательное поле, без значения по умолчанию
     MODEL_NAME: str = "deepseek-r1-distill-llama-70b"  # Более вероятная модель для Groq
-    MAX_TOKENS: int = 6000
+    MAX_TOKENS: int = 32000
     TEMPERATURE: float = 0
     
     # Настройки базы данных векторов
