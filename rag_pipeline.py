@@ -9,6 +9,7 @@ import logging
 from config import settings
 import shutil
 import re
+import time
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -43,6 +44,10 @@ comparison_prompt = PromptTemplate(
 )
 
 class RAGPipeline:
+    # Список ключей и индекс текущего ключа
+    API_KEYS = settings.GROQ_API_KEY.split(",")  # Берем из settings, разделяем по запятой
+    current_key_index = 0
+
     def __init__(self):
         """Инициализация RAGPipeline."""
         self.model_name = settings.MODEL_NAME
@@ -60,9 +65,9 @@ class RAGPipeline:
     def initialize_model(self) -> None:
         """Инициализация модели через Groq API."""
         try:
-            logger.info(f"Инициализация модели {self.model_name} через Groq...")
+            logger.info(f"Инициализация модели {self.model_name} через Groq с ключом {self.current_key_index}...")
             self.llm = ChatGroq(
-                groq_api_key=settings.GROQ_API_KEY,
+                groq_api_key=self.API_KEYS[self.current_key_index].strip(),  # Первый ключ из списка, убираем пробелы
                 model_name=self.model_name,
                 temperature=settings.TEMPERATURE,
                 max_tokens=settings.MAX_TOKENS
@@ -70,6 +75,22 @@ class RAGPipeline:
             logger.info(f"Модель {self.model_name} успешно инициализирована!")
         except Exception as e:
             logger.error(f"Ошибка при инициализации модели: {str(e)}")
+            raise
+
+    def switch_api_key(self) -> None:
+        """Переключение на следующий API ключ."""
+        try:
+            self.current_key_index = (self.current_key_index + 1) % len(self.API_KEYS)
+            logger.info(f"Переключение на ключ {self.current_key_index}")
+            self.llm = ChatGroq(
+                groq_api_key=self.API_KEYS[self.current_key_index].strip(),  # Убираем лишние пробелы
+                model_name=self.model_name,
+                temperature=settings.TEMPERATURE,
+                max_tokens=settings.MAX_TOKENS
+            )
+            logger.info(f"Успешно переключено на ключ {self.current_key_index}")
+        except Exception as e:
+            logger.error(f"Ошибка при переключении ключа: {str(e)}")
             raise
 
     def initialize_embeddings(self) -> None:
@@ -156,6 +177,11 @@ class RAGPipeline:
             
             return "\n".join(f"- {req}" for req in cleaned_requirements)
         except Exception as e:
+            if "429" in str(e) or "413" in str(e):  # Обработка 429 и 413
+                logger.warning(f"Ошибка {str(e).split()[2] if len(str(e).split()) > 2 else 'неизвестно'}, переключение ключа...")
+                self.switch_api_key()
+                time.sleep(2)  # Задержка для соблюдения лимитов
+                return self.extract_tz_requirements(tz_content)  # Повторная попытка
             logger.error(f"Ошибка при извлечении требований из ТЗ: {str(e)}")
             tz_chunks = self.split_into_chunks(tz_text, "tz")
             fallback_result = "\n".join(f"- {chunk['content']}" for chunk in tz_chunks if "должен" in chunk['content'].lower())
@@ -211,6 +237,11 @@ class RAGPipeline:
             logger.info("Анализ документов завершен успешно")
             return analysis_results
         except Exception as e:
+            if "429" in str(e) or "413" in str(e):  # Обработка 429 и 413
+                logger.warning(f"Ошибка {str(e).split()[2] if len(str(e).split()) > 2 else 'неизвестно'}, переключение ключа...")
+                self.switch_api_key()
+                time.sleep(2)  # Задержка для соблюдения лимитов
+                return self.analyze_documents(tz_vectorstore, doc_vectorstore, tz_content)  # Повторная попытка
             logger.error(f"Ошибка при анализе документов: {str(e)}")
             req_blocks = [r.strip()[2:] for r in requirements.split("\n") if r.strip().startswith("- ")]
             doc_blocks = [doc.page_content for doc in doc_vectorstore.similarity_search("", k=10)]
@@ -240,10 +271,6 @@ def generate_analysis(tz_content: Dict, doc_content: Dict) -> List[Dict]:
         logger.error(f"Ошибка при генерации анализа: {str(e)}")
         raise
 
-
-import re
-
-
 def explain_point(point: str) -> str:
     try:
         explanation_prompt = """Перефразируй техническое требование в одно краткое предложение. 
@@ -271,5 +298,10 @@ def explain_point(point: str) -> str:
         return explanation.replace("Упрощённое:", "").strip()
 
     except Exception as e:
+        if "429" in str(e) or "413" in str(e):  # Обработка 429 и 413
+            logger.warning(f"Ошибка {str(e).split()[2] if len(str(e).split()) > 2 else 'неизвестно'} в explain_point, переключение ключа...")
+            rag_pipeline.switch_api_key()
+            time.sleep(2)  # Задержка для соблюдения лимитов
+            return explain_point(point)  # Повторная попытка
         logger.error(f"Ошибка объяснения: {str(e)}")
         return f"Суть требования: {point.split('.')[0]}" if "." in point else point
