@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict
 from config import settings
-from rag_pipeline import generate_analysis, explain_point
+from rag_pipeline import generate_analysis, explain_point, generate_detailed_explanation
 from database import get_db, UploadedFile, ComparisonSession, db_manager, AsyncSessionLocal, create_tables, engine
 from sqlalchemy import select
 import uuid
@@ -32,6 +32,7 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
@@ -52,6 +53,63 @@ async def add_charset_middleware(request, call_next):
 async def root():
     with open("static/index.html", encoding='utf-8') as f:
         return f.read()
+@app.get("/view-file/{file_id}")
+async def view_file(file_id: int, db: AsyncSession = Depends(get_db)):
+    """Эндпоинт для просмотра загруженного файла."""
+    try:
+        query = select(UploadedFile).where(UploadedFile.id == file_id)
+        result = await db.execute(query)
+        file = result.scalar_one_or_none()
+
+        if not file:
+            raise HTTPException(status_code=404, detail="Файл не найден")
+
+        file_path = os.path.join(UPLOAD_DIR, file.stored_name)
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Файл не найден на сервере")
+
+        # Определяем тип контента в зависимости от расширения файла
+        if file_path.endswith('.pdf'):
+            media_type = 'application/pdf'
+        elif file_path.endswith('.docx'):
+            media_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        elif file_path.endswith('.txt'):
+            media_type = 'text/plain'
+        else:
+            media_type = 'application/octet-stream'
+
+        return FileResponse(
+            file_path,
+            media_type=media_type,
+            headers={"Content-Disposition": f'inline; filename="{file.original_name}"'}
+        )
+    except Exception as e:
+        logger.error(f"Ошибка при просмотре файла: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/file-info/{file_id}")
+async def get_file_info(file_id: int, db: AsyncSession = Depends(get_db)):
+    """Эндпоинт для получения информации о файле."""
+    try:
+        query = select(UploadedFile).where(UploadedFile.id == file_id)
+        result = await db.execute(query)
+        file = result.scalar_one_or_none()
+
+        if not file:
+            raise HTTPException(status_code=404, detail="Файл не найден")
+
+        return {
+            "id": file.id,
+            "original_name": file.original_name,
+            "file_type": file.file_type,
+            "file_size": file.file_size,
+            "upload_date": file.upload_date,
+            "is_deleted": file.is_deleted
+        }
+    except Exception as e:
+        logger.error(f"Ошибка при получении информации о файле: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/processing")
 async def processing_page():
@@ -307,6 +365,52 @@ async def explain_requirement(request: Dict[str, str], db: AsyncSession = Depend
         logger.error(f"Ошибка при получении пояснения: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка при обработке запроса: {str(e)}")
 
+@app.post("/find-in-document")
+async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(get_db)):
+    """Поиск требования в документации (заглушка)"""
+    return {"status": "success", "message": "Функция в разработке"}
+
+
+@app.post("/detailed-explain")
+async def detailed_explain(
+        request: Dict[str, str],
+        db: AsyncSession = Depends(get_db)
+):
+    """Эндпоинт для детального пояснения"""
+    try:
+        requirement = request["requirement"]
+        session_id = request["session_id"]
+
+        # Получаем сессию сравнения
+        session = await db.execute(
+            select(ComparisonSession)
+            .where(ComparisonSession.session_id == session_id)
+        )
+        session = session.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Сессия не найдена")
+
+        # Получаем файлы
+        tz_file = await db.get(UploadedFile, session.tz_file_id)
+        doc_file = await db.get(UploadedFile, session.doc_file_id)
+
+        # Читаем содержимое
+        tz_content = await read_file_content(tz_file.id, db)
+        doc_content = await read_file_content(doc_file.id, db)
+
+        # Генерируем пояснение
+        explanation = generate_detailed_explanation(
+            requirement=requirement,
+            tz_content=tz_content,
+            doc_content=doc_content
+        )
+
+        return {"explanation": explanation}
+
+    except Exception as e:
+        logger.error(f"Ошибка детального пояснения: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/download-report/{session_id}")
 async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):

@@ -42,6 +42,33 @@ comparison_prompt = PromptTemplate(
 
 Ответ: """
 )
+# Добавляем новый шаблон для детального анализа
+detailed_explanation_prompt = PromptTemplate(
+    input_variables=["requirement", "tz_text", "doc_text"],
+    template="""**Задача:** Проведи детальный анализ несоответствия между требованием и документацией.
+
+**Требование из ТЗ:**
+{requirement}
+
+**Фрагмент ТЗ:**
+{tz_text}
+
+**Фрагмент документации:**
+{doc_text}
+
+**Анализ:**
+1. Укажи конкретные пункты несоответствия
+2. Объясни причину (техническую/логическую)
+3. Предложи способ исправления
+4. Оцени критичность (1-5 баллов)
+
+**Формат вывода:**
+- Несоответствие: [текст]
+- Причина: [текст] 
+- Рекомендация: [текст]
+- Критичность: [число]/5"""
+)
+
 
 class RAGPipeline:
     # Список ключей и индекс текущего ключа
@@ -270,6 +297,74 @@ def generate_analysis(tz_content: Dict, doc_content: Dict) -> List[Dict]:
     except Exception as e:
         logger.error(f"Ошибка при генерации анализа: {str(e)}")
         raise
+
+
+def find_most_relevant_chunk(query: str, text: str, chunk_size: int = 1000) -> str:
+    """
+    Находит наиболее релевантный фрагмент текста для заданного требования.
+
+    Алгоритм:
+    1. Разбивает текст на чанки
+    2. Считает совпадения ключевых слов
+    3. Возвращает лучший фрагмент
+    """
+    try:
+        # 1. Предварительная очистка текста
+        text = re.sub(r'\s+', ' ', text).strip()
+
+        # 2. Создаем сплиттер (как в основном пайплайне)
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=200,
+            separators=["\n\n", "\n", ". ", " ", ""]
+        )
+
+        # 3. Извлекаем ключевые слова из запроса
+        keywords = set()
+        for word in re.findall(r'\w+', query.lower()):
+            if len(word) > 3:  # Игнорируем короткие слова
+                keywords.add(word)
+
+        # 4. Ищем наиболее релевантный чанк
+        chunks = splitter.split_text(text)
+        best_chunk = ""
+        max_score = 0
+
+        for chunk in chunks:
+            score = sum(1 for keyword in keywords if keyword in chunk.lower())
+            if score > max_score:
+                max_score = score
+                best_chunk = chunk
+
+        return best_chunk if best_chunk else text[:chunk_size]  # Fallback
+
+    except Exception as e:
+        logger.error(f"Ошибка поиска чанка: {str(e)}")
+        return text[:chunk_size]  # Возвращаем начало текста при ошибке
+
+
+def generate_detailed_explanation(requirement: str, tz_content: Dict, doc_content: Dict) -> str:
+    """Генерация детального пояснения с поиском релевантных фрагментов"""
+    try:
+        # 1. Находим релевантные чанки
+        tz_chunk = find_most_relevant_chunk(requirement, tz_content['raw_text'])
+        doc_chunk = find_most_relevant_chunk(requirement, doc_content['raw_text'])
+
+        # 2. Генерация пояснения (существующий промпт)
+        response = rag_pipeline.llm.invoke(
+            detailed_explanation_prompt.format(
+                requirement=requirement,
+                tz_text=tz_chunk[:5000],  # Ограничиваем объем
+                doc_text=doc_chunk[:5000]
+            )
+        )
+
+        return response.content
+
+    except Exception as e:
+        logger.error(f"Ошибка генерации пояснения: {str(e)}")
+        return f"Не удалось сгенерировать пояснение: {str(e)}"
+
 
 def explain_point(point: str) -> str:
     try:

@@ -142,37 +142,86 @@ h1 {
 }
 
 /* Кнопка сравнения */
+/* Обновленные стили для кнопки сравнения */
+/* Основные стили кнопки Сравнение */
+/* Светлая тема - оригинальные цвета */
 .compare-button {
-    position: absolute;
-    bottom: 40px;
-    right: 40px;
-    padding: 16px 24px;
+    display: none;
+    padding: 12px 24px;
+    background-color: #4CAF50; /* Изначальный зеленый */
+    color: white;
     border: none;
-    border-radius: 16px;
-    background-color: var(--button-background); /* Светло-розовый фон */
-    color: white; /* Белый текст */
-    font-size: 16px;
-    font-weight: 500;
+    border-radius: 4px;
     cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    margin-top: 30px;
+    width: 200px;
+    align-self: center;
+    text-align: center;
 }
 
 .compare-button:hover {
-    background-color: var(--button-hover);
+    background-color: #45a049; /* Темно-зеленый при наведении */
     transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.compare-button:active {
-    transform: translateY(0);
+.upload-button {
+    background-color: #4CAF50; /* Зеленый */
+    color: white;
+    /* остальные стили без изменений */
 }
 
-.compare-button::after {
-    content: "→";
-    font-size: 20px;
-    line-height: 1;
+.view-file-button {
+    background-color: #4CAF50; /* Зеленый */
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.view-file-button:hover {
+    background-color: #45a049;
+}
+
+/* Темная тема - оставляем как было (не трогаем) */
+.dark-theme .compare-button {
+    background-color: #E0E0E0; /* Светло-серый */
+    color: #333;
+    border-color: #BDBDBD;
+}
+
+.dark-theme .compare-button:hover {
+    background-color: #BDBDBD;
+}
+
+.dark-theme .upload-button {
+    background-color: #E0E0E0;
+    color: #333;
+    border-color: #BDBDBD;
+}
+
+.dark-theme .view-file-button {
+    background-color: #E0E0E0;
+    color: #333;
+    border-color: #BDBDBD;
+}
+
+/* Добавим в конец styles.css */
+.container {
+    display: flex;
+    flex-direction: column;
+}
+
+.uploaded-files {
+    margin-bottom: 15px;
 }
 
 /* Карточка с результатами */
@@ -792,4 +841,222 @@ h1 {
     max-height: calc(100vh - 200px);
     overflow-y: auto;
     padding-right: 10px;
+}
+
+.file-item {
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.view-file-button {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.view-file-button:hover {
+    background-color: #45a049;
+}
+
+/* Для темной темы */
+.dark-theme .file-item {
+    border-bottom: 1px solid #444;
+}
+
+.dark-theme .view-file-button {
+    background-color: #388E3C;
+}
+
+.dark-theme .view-file-button:hover {
+    background-color: #2E7D32;
+}
+/* Стили для модального окна просмотра файлов */
+.file-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.file-modal-content {
+    background-color: white;
+    width: 80%;
+    max-width: 800px;
+    max-height: 80vh;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.file-modal-header {
+    padding: 15px;
+    background-color: #f5f5f5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ddd;
+}
+
+.file-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.close-modal {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0 10px;
+}
+
+.file-content-container {
+    padding: 15px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.file-content {
+    white-space: pre-wrap;
+    font-family: monospace;
+    margin: 0;
+}
+
+/* Темная тема для модального окна */
+.dark-theme .file-modal-content {
+    background-color: #333;
+    color: white;
+}
+
+.dark-theme .file-modal-header {
+    background-color: #444;
+    border-bottom: 1px solid #555;
+}
+
+.dark-theme .file-content {
+    color: #eee;
+}
+.file-content-loading {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+}
+
+.dark-theme .file-content-loading {
+    color: #aaa;
+}
+@media (max-width: 600px) {
+    .compare-button {
+        margin-top: 30px;
+        width: 100%;
+    }
+
+    .file-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .view-file-button {
+        margin-top: 8px;
+        width: 100%;
+    }
+}
+
+/* Стили для новых элементов (не влияют на существующие) */
+.error-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.error-details {
+    padding-top: 15px;
+    margin-top: 15px;
+    border-top: 1px dashed #ddd;
+    animation: fadeIn 0.3s ease;
+}
+
+.toggle-details {
+    background: none;
+    border: 1px solid #4CAF50;
+    color: #4CAF50;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Темная тема */
+.dark-theme .error-details {
+    border-top-color: #444;
+}
+
+.dark-theme .toggle-details {
+    border-color: #E0E0E0;
+    color: #E0E0E0;
+}
+/* Стили для детального пояснения */
+.detailed-explanation {
+    background-color: #f8f9fa;
+    border-left: 3px solid #4CAF50;
+    padding: 15px;
+    margin-top: 10px;
+    border-radius: 0 4px 4px 0;
+    animation: fadeIn 0.5s ease;
+}
+
+.dark-theme .detailed-explanation {
+    background-color: #2a2a2a;
+    border-left-color: #388E3C;
+}
+
+.loading-explanation {
+    color: #666;
+    font-style: italic;
+    margin: 10px 0;
+}
+
+.close-explanation {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    margin-top: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
 }

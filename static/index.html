@@ -10,29 +10,29 @@
 <body>
     <button class="theme-toggle" id="theme-toggle">Темная тема</button>
     <div class="container">
-        <div class="upload-card">
-            <h1>Загрузка ТЗ и документации</h1>
-            
-            <button class="upload-button" onclick="document.getElementById('tz-input').click()">
-                добавить ТЗ
-            </button>
-            <input type="file" id="tz-input" hidden accept=".docx,.pdf,.txt">
-            
-            <button class="upload-button" onclick="document.getElementById('doc-input').click()">
-                добавить документацию
-            </button>
-            <input type="file" id="doc-input" hidden accept=".docx,.pdf,.txt">
-            
-            <div id="uploaded-files" class="uploaded-files" style="display: none;">
-                <p>загружены файлы:</p>
-                <div id="file-list"></div>
-            </div>
-        </div>
-        
-        <button id="compare-button" class="compare-button" style="display: none;">
-            Сравнение
+    <div class="upload-card">
+        <h1>Загрузка ТЗ и документации</h1>
+
+        <button class="upload-button" onclick="document.getElementById('tz-input').click()">
+            добавить ТЗ
         </button>
+        <input type="file" id="tz-input" hidden accept=".docx,.pdf,.txt">
+
+        <button class="upload-button" onclick="document.getElementById('doc-input').click()">
+            добавить документацию
+        </button>
+        <input type="file" id="doc-input" hidden accept=".docx,.pdf,.txt">
     </div>
+
+    <div id="uploaded-files" class="uploaded-files" style="display: none;">
+        <p>Загруженные файлы:</p>
+        <div id="file-list"></div>
+    </div>
+
+    <button id="compare-button" class="compare-button" style="display: none;">
+        Сравнение
+    </button>
+</div>
     <div id="error-report" class="error-report">
         <p>Ошибка: файл не загружен.</p>
     </div>
@@ -46,7 +46,9 @@
             <img src="/uploads/Снимок экрана 2025-03-20 в 19.00.21.png">
         </div>
     </div>
-
+    <!-- Заменим блок uploaded-files на этот: -->
     <script src="/static/js/script.js"></script>
+    <!-- В head добавим preconnect для ускорения загрузки -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
 </body>
 </html>
