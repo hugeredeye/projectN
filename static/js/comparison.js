@@ -161,10 +161,20 @@ document.addEventListener('DOMContentLoaded', function() {
             modal.className = 'modal';
             modal.innerHTML = `
                 <div class="modal-content">
+                    <div class="search-container">
+                        <h3>Интерактивный поиск</h3>
+                        <div class="search-input-container">
+                            <input type="text" class="search-input" placeholder="Например: Объяснить несоответствие в обработке изображений">
+                            <button class="search-button">Найти</button>
+                        </div>
+                    </div>
                     <h2>Отчет об ошибках</h2>
                     <div class="errors-list">
                         ${data.errors.map(error => `
-                            <div class="error-item">
+                            <div class="error-item" 
+                                 data-content="${error.requirement.toLowerCase()} ${error.status.toLowerCase()} ${error.criticality.toLowerCase()} ${error.analysis.toLowerCase()}"
+                                 data-section="${error.section || 'Общие требования'}"
+                                 data-status="${error.status === 'соответствует ТЗ' ? 'success' : 'error'}">
                                 <h3>${error.requirement}</h3>
                                 <p class="status ${error.status === 'соответствует ТЗ' ? 'success' : 'error'}">
                                     Статус: ${error.status}
@@ -180,15 +190,173 @@ document.addEventListener('DOMContentLoaded', function() {
             
             document.body.appendChild(modal);
             
+            // Создаем боковую панель с пояснениями
+            const explanationPanel = document.createElement('div');
+            explanationPanel.className = 'explanation-panel';
+            explanationPanel.innerHTML = `
+                <button class="close-panel">×</button>
+                <h3>Пояснение</h3>
+                <div class="explanation-content">
+                    <div class="explanation-text"></div>
+                    <div class="reference-links"></div>
+                </div>
+            `;
+            document.body.appendChild(explanationPanel);
+            
+            // Добавляем функциональность поиска
+            const searchInput = modal.querySelector('.search-input');
+            const searchButton = modal.querySelector('.search-button');
+            const errorItems = modal.querySelectorAll('.error-item');
+            
+            function performSearch() {
+                const searchTerm = searchInput.value.toLowerCase();
+                
+                // Сбрасываем подсветку
+                errorItems.forEach(item => {
+                    item.classList.remove('highlight-section');
+                    item.style.display = 'block';
+                });
+                
+                if (searchTerm.length < 3) {
+                    alert('Введите минимум 3 символа для поиска');
+                    return;
+                }
+                
+                let foundItems = false;
+                
+                // Обрабатываем интерактивный запрос
+                if (searchTerm.includes('объяснить') || searchTerm.includes('показать')) {
+                    // Извлекаем ключевые слова из запроса
+                    const keywords = searchTerm
+                        .replace(/^(объяснить|показать)/, '')
+                        .trim()
+                        .split(' ')
+                        .filter(word => word.length > 2);
+                    
+                    errorItems.forEach(item => {
+                        const content = item.getAttribute('data-content');
+                        const itemSection = item.getAttribute('data-section');
+                        
+                        // Проверяем совпадение по всем ключевым словам
+                        const matches = keywords.some(keyword => {
+                            const contentMatch = content.includes(keyword);
+                            const sectionMatch = itemSection.toLowerCase().includes(keyword);
+                            return contentMatch || sectionMatch;
+                        });
+                        
+                        if (matches) {
+                            foundItems = true;
+                            item.classList.add('highlight-section');
+                            item.classList.add(item.getAttribute('data-status'));
+                            
+                            // Показываем пояснение в боковой панели
+                            const explanationText = item.querySelector('p:last-child').textContent;
+                            const sectionRef = item.getAttribute('data-section');
+                            
+                            // Обновляем содержимое боковой панели
+                            const explanationPanelText = explanationPanel.querySelector('.explanation-text');
+                            const referenceLinks = explanationPanel.querySelector('.reference-links');
+                            
+                            // Добавляем новый результат, сохраняя предыдущие
+                            const newExplanation = document.createElement('div');
+                            newExplanation.className = 'explanation-item';
+                            newExplanation.innerHTML = `
+                                <h4>${item.querySelector('h3').textContent}</h4>
+                                <p>${explanationText}</p>
+                                <a href="#" class="reference-link" data-section="${sectionRef}">
+                                    ТЗ, ${sectionRef}
+                                </a>
+                            `;
+                            
+                            explanationPanelText.appendChild(newExplanation);
+                            
+                            // Показываем боковую панель
+                            explanationPanel.classList.add('active');
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                } else {
+                    // Обычный поиск по всем полям
+                    errorItems.forEach(item => {
+                        const content = item.getAttribute('data-content');
+                        const itemSection = item.getAttribute('data-section');
+                        const matches = content.includes(searchTerm) || itemSection.toLowerCase().includes(searchTerm);
+                        
+                        if (matches) {
+                            foundItems = true;
+                            item.classList.add('highlight-section');
+                            item.classList.add(item.getAttribute('data-status'));
+                            
+                            // Показываем пояснение в боковой панели
+                            const explanationText = item.querySelector('p:last-child').textContent;
+                            const sectionRef = item.getAttribute('data-section');
+                            
+                            // Обновляем содержимое боковой панели
+                            const explanationPanelText = explanationPanel.querySelector('.explanation-text');
+                            const referenceLinks = explanationPanel.querySelector('.reference-links');
+                            
+                            // Добавляем новый результат, сохраняя предыдущие
+                            const newExplanation = document.createElement('div');
+                            newExplanation.className = 'explanation-item';
+                            newExplanation.innerHTML = `
+                                <h4>${item.querySelector('h3').textContent}</h4>
+                                <p>${explanationText}</p>
+                                <a href="#" class="reference-link" data-section="${sectionRef}">
+                                    ТЗ, ${sectionRef}
+                                </a>
+                            `;
+                            
+                            explanationPanelText.appendChild(newExplanation);
+                            
+                            // Показываем боковую панель
+                            explanationPanel.classList.add('active');
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                }
+                
+                if (!foundItems) {
+                    alert('По вашему запросу ничего не найдено');
+                }
+            }
+            
+            // Обработчики событий
+            searchButton.addEventListener('click', performSearch);
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performSearch();
+                }
+            });
+            
+            // Обработчики закрытия
             modal.querySelector('.close-button').addEventListener('click', () => {
                 modal.remove();
+                explanationPanel.remove();
+            });
+            
+            explanationPanel.querySelector('.close-panel').addEventListener('click', () => {
+                explanationPanel.classList.remove('active');
             });
             
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
                     modal.remove();
+                    explanationPanel.remove();
                 }
             });
+            
+            // Обработчик клика по ссылкам в боковой панели
+            explanationPanel.addEventListener('click', (e) => {
+                if (e.target.classList.contains('reference-link')) {
+                    e.preventDefault();
+                    const section = e.target.getAttribute('data-section');
+                    searchInput.value = `Показать раздел ${section}`;
+                    performSearch();
+                }
+            });
+            
         } catch (error) {
             alert('Ошибка при получении отчета об ошибках');
             console.error('Ошибка:', error);

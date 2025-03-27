@@ -592,3 +592,204 @@ h1 {
     display: block;
     border-radius: 5px;
 }
+
+/* Стили для интерактивной панели поиска */
+.search-container {
+    position: sticky;
+    top: 0;
+    background: var(--card-background);
+    padding: 20px;
+    border-bottom: 2px solid var(--button-background);
+    z-index: 1;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 10px var(--shadow-color);
+}
+
+.search-container h3 {
+    margin: 0 0 15px 0;
+    color: var(--text-color);
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.search-input-container {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.search-input {
+    flex: 1;
+    padding: 12px 20px;
+    border: 2px solid var(--button-background);
+    border-radius: 12px;
+    font-size: 16px;
+    outline: none;
+    transition: all 0.3s;
+    background: var(--card-background);
+    color: var(--text-color);
+}
+
+.search-input:focus {
+    border-color: var(--button-hover);
+    box-shadow: 0 0 0 3px rgba(231, 199, 211, 0.2);
+}
+
+.search-input::placeholder {
+    color: var(--secondary-text-color);
+}
+
+.search-button {
+    padding: 12px 24px;
+    background-color: var(--button-background);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+    white-space: nowrap;
+}
+
+.search-button:hover {
+    background-color: var(--button-hover);
+    transform: translateY(-2px);
+}
+
+.search-button:active {
+    transform: translateY(0);
+}
+
+/* Стили для боковой панели с пояснениями */
+.explanation-panel {
+    position: fixed;
+    right: 0;
+    top: 0;
+    height: 100vh;
+    width: 300px;
+    background: var(--card-background);
+    box-shadow: -2px 0 10px var(--shadow-color);
+    padding: 20px;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 1001;
+    overflow-y: auto;
+}
+
+.explanation-panel.active {
+    transform: translateX(0);
+}
+
+.explanation-panel h3 {
+    margin: 0 0 15px 0;
+    color: var(--text-color);
+    font-size: 18px;
+}
+
+.explanation-content {
+    margin-bottom: 20px;
+}
+
+.explanation-text {
+    color: var(--text-color);
+    line-height: 1.6;
+    margin-bottom: 15px;
+}
+
+.reference-links {
+    margin-top: 20px;
+}
+
+.reference-link {
+    display: block;
+    color: var(--button-background);
+    text-decoration: none;
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(231, 199, 211, 0.1);
+    transition: all 0.2s;
+}
+
+.reference-link:hover {
+    background: rgba(231, 199, 211, 0.2);
+    transform: translateX(5px);
+}
+
+.close-panel {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--text-color);
+    padding: 5px;
+}
+
+/* Стили для подсветки найденных разделов */
+.highlight-section {
+    background-color: rgba(231, 199, 211, 0.2);
+    border-left: 4px solid var(--button-background);
+    padding-left: 15px;
+    transition: all 0.3s;
+}
+
+.highlight-section.error {
+    border-left-color: var(--discrepancy-color);
+}
+
+.highlight-section.success {
+    border-left-color: var(--match-color);
+}
+
+.hidden {
+    display: none;
+}
+
+/* Стили для элементов пояснений в боковой панели */
+.explanation-item {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(231, 199, 211, 0.1);
+    border-radius: 8px;
+    border-left: 3px solid var(--button-background);
+}
+
+.explanation-item h4 {
+    margin: 0 0 10px 0;
+    color: var(--text-color);
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.explanation-item p {
+    margin: 0 0 10px 0;
+    color: var(--text-color);
+    line-height: 1.5;
+    font-size: 14px;
+}
+
+.explanation-item .reference-link {
+    display: inline-block;
+    color: var(--button-background);
+    text-decoration: none;
+    font-size: 14px;
+    padding: 5px 10px;
+    background: rgba(231, 199, 211, 0.2);
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.explanation-item .reference-link:hover {
+    background: rgba(231, 199, 211, 0.3);
+    transform: translateX(5px);
+}
+
+.explanation-text {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    padding-right: 10px;
+}
