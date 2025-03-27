@@ -4,8 +4,9 @@
     --card-background: white;
     --text-color: #000000;
     --secondary-text-color: #666666;
-    --button-background: #E7C7D3;
-    --button-hover: #D1A5B1;
+    --button-background: #DE5D83; /* Новый яркий розовый */
+    --button-hover: #C94D6B;
+    --button-active: #B0415C;     /* Новый цвет для нажатия */
     --shadow-color: rgba(0, 0, 0, 0.08);
     --match-bg: #e8f5e9;
     --match-color: #28a745;
@@ -23,7 +24,7 @@
     --status-success-bg: #e8f5e9;
     --status-error-bg: #f8d7da;
     --back-button-bg: #E5C1CD;
-    --theme-toggle-bg: white;           /* Белый фон для светлой темы */
+    --theme-toggle-bg: white;
     --theme-toggle-text: #F5C6D6;       /* Розовый текст для светлой темы */
     --button-background: #F5C6D6;       /* Определение розового цвета, если еще не задано */
 }
@@ -33,8 +34,9 @@
     --card-background: #3C3C3C;
     --text-color: #FFFFFF;
     --secondary-text-color: #B0B0B0;
-    --button-background: #555555;
-    --button-hover: #777777;
+    --button-background: #DE5D83; /* Тот же цвет для темной темы */
+    --button-hover: #C94D6B;
+    --button-active: #B0415C;
     --shadow-color: rgba(0, 0, 0, 0.5);
     --match-bg: #1a3c34;
     --match-color: #34c759;
@@ -148,7 +150,8 @@ h1 {
 .compare-button {
     display: none;
     padding: 12px 24px;
-    background-color: #4CAF50; /* Изначальный зеленый */
+    background-color: white;
+    color: var(--button-background); /* #F5C6D6 в светлой теме */
     color: white;
     border: none;
     border-radius: 4px;
@@ -165,19 +168,13 @@ h1 {
 }
 
 .compare-button:hover {
-    background-color: #45a049; /* Темно-зеленый при наведении */
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.upload-button {
-    background-color: #4CAF50; /* Зеленый */
-    color: white;
-    /* остальные стили без изменений */
+    background-color: #f0e6f0; /* Светло-розовый фон */
+    color: #C94D6B; /* Темно-розовый текст для контраста */
 }
 
 .view-file-button {
-    background-color: #4CAF50; /* Зеленый */
     color: white;
     border: none;
     padding: 5px 10px;
@@ -187,32 +184,6 @@ h1 {
     transition: all 0.2s ease;
 }
 
-.view-file-button:hover {
-    background-color: #45a049;
-}
-
-/* Темная тема - оставляем как было (не трогаем) */
-.dark-theme .compare-button {
-    background-color: #E0E0E0; /* Светло-серый */
-    color: #333;
-    border-color: #BDBDBD;
-}
-
-.dark-theme .compare-button:hover {
-    background-color: #BDBDBD;
-}
-
-.dark-theme .upload-button {
-    background-color: #E0E0E0;
-    color: #333;
-    border-color: #BDBDBD;
-}
-
-.dark-theme .view-file-button {
-    background-color: #E0E0E0;
-    color: #333;
-    border-color: #BDBDBD;
-}
 
 /* Добавим в конец styles.css */
 .container {
@@ -514,8 +485,8 @@ h1 {
     top: 20px;
     right: 20px;
     padding: 10px 20px;
-    background-color: var(--theme-toggle-bg);
-    color: var(--theme-toggle-text);
+    background-color: var(--theme-toggle-bg); /* white в светлой теме */
+    color: var(--theme-toggle-text); /* #F5C6D6 в светлой теме */
     border: none;
     border-radius: 16px;
     cursor: pointer;
@@ -524,8 +495,8 @@ h1 {
 }
 
 .theme-toggle:hover {
-    background-color: #f0e6f0;          /* Светло-розовый фон при наведении в светлой теме */
-    color: #333333;                     /* Темный текст для контраста */
+    background-color: #f0e6f0; /* Светло-розовый фон */
+    color: #C94D6B; /* Темно-розовый текст */
 }
 
 .dark-theme .theme-toggle:hover {
@@ -688,26 +659,45 @@ h1 {
     color: var(--secondary-text-color);
 }
 
-.search-button {
+/* Общие стили для кнопок "Найти" и "Подробнее" */
+.search-button,
+.toggle-details {
     padding: 12px 24px;
-    background-color: var(--button-background);
-    color: white;
     border: none;
     border-radius: 12px;
     font-size: 16px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.3s;
-    white-space: nowrap;
+    background-color: var(--button-background);
+    color: white;
+    margin-top: 15px; /* Отступ как у кнопки "Найти" */
 }
 
-.search-button:hover {
+/* Состояние hover */
+.search-button:hover,
+.toggle-details:hover {
     background-color: var(--button-hover);
     transform: translateY(-2px);
+    box-shadow: 0 2px 8px var(--shadow-color);
 }
 
-.search-button:active {
+/* Состояние active */
+.search-button:active,
+.toggle-details:active {
     transform: translateY(0);
+}
+
+/* Темная тема */
+.dark-theme .search-button,
+.dark-theme .toggle-details {
+    background-color: var(--button-background);
+    color: white;
+}
+
+.dark-theme .search-button:hover,
+.dark-theme .toggle-details:hover {
+    background-color: var(--button-hover);
 }
 
 /* Стили для боковой панели с пояснениями */
@@ -852,32 +842,27 @@ h1 {
     border-bottom: 1px solid #eee;
 }
 
+/* Кнопка "Просмотреть" в обеих темах */
 .view-file-button {
-    background-color: #4CAF50;
+    background-color: var(--button-background); /* #F5C6D6 в светлой, #DE5D83 в темной */
     color: white;
-    border: none;
-    padding: 5px 10px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
 }
 
+/* Эффект наведения */
 .view-file-button:hover {
-    background-color: #45a049;
+    background-color: var(--button-hover); /* #C94D6B в обеих темах */
 }
 
-/* Для темной темы */
-.dark-theme .file-item {
-    border-bottom: 1px solid #444;
-}
-
+/* Убедимся, что в темной теме стили一致 */
 .dark-theme .view-file-button {
-    background-color: #388E3C;
+    background-color: var(--button-background); /* #DE5D83 */
+    color: white;
 }
 
 .dark-theme .view-file-button:hover {
-    background-color: #2E7D32;
+    background-color: var(--button-hover); /* #C94D6B */
 }
+
 /* Стили для модального окна просмотра файлов */
 .file-modal {
     position: fixed;
@@ -996,8 +981,9 @@ h1 {
 
 .toggle-details {
     background: none;
-    border: 1px solid #4CAF50;
-    color: #4CAF50;
+    border: 1px solid var(--button-hover); /* Темно-розовый (#D1A5B1) */
+    color: var(--button-hover);
+    background-color: rgba(209, 165, 177, 0.1); /* Легкая подложка */
     padding: 5px 10px;
     border-radius: 4px;
     cursor: pointer;
@@ -1022,9 +1008,17 @@ h1 {
 }
 
 .dark-theme .toggle-details {
-    border-color: #E0E0E0;
-    color: #E0E0E0;
+    border-color: var(--button-hover);
+    color: var(--button-hover);
+    background-color: rgba(209, 165, 177, 0.2);
 }
+
+/* Добавить анимацию при наведении */
+.toggle-details:hover {
+    background-color: rgba(209, 165, 177, 0.2);
+    transform: translateY(-1px);
+}
+
 /* Стили для детального пояснения */
 .detailed-explanation {
     background-color: #f8f9fa;
@@ -1060,6 +1054,7 @@ h1 {
     from { opacity: 0; transform: translateX(-10px); }
     to { opacity: 1; transform: translateX(0); }
 }
+
 /* PDF Viewer */
 .pdf-viewer {
     width: 100%;
@@ -1245,4 +1240,159 @@ canvas {
 .dark-theme .markdown-content code {
     background: #2a2a2a;
     color: #f8f8f8;
+
+/* Увеличиваем расстояние между блоками статусов */
+.error-item,
+.result-section,
+.status-card {
+    margin-bottom: 30px; /* Было 15-20px */
+    padding: 20px; /* Добавляем внутренние отступы */
+}
+
+/* Увеличиваем расстояние между заголовком и контентом */
+.error-item h3,
+.result-section h2 {
+    margin-bottom: 25px; /* Было 10-15px */
+}
+
+/* Увеличиваем расстояние между кнопкой и текстом */
+.toggle-details {
+    margin-top: 20px; /* Добавляем отступ сверху */
+}
+
+/* Для мобильной версии */
+@media (max-width: 600px) {
+    .error-item,
+    .result-section {
+        margin-bottom: 25px;
+        padding: 15px;
+    }
+    
+    .error-item h3 {
+        margin-bottom: 20px;
+    }
+}
+
+/* Общий стиль для всех кнопок */
+.button {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 16px;
+    background-color: var(--button-background);
+    color: white;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.button:hover {
+    background-color: var(--button-hover);
+    transform: translateY(-2px);
+}
+
+.button:active {
+    background-color: var(--button-active);
+    transform: translateY(0);
+}
+
+/* Кнопки загрузки */
+.upload-button.button {
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+.upload-button.button:last-of-type {
+    margin-bottom: 30px;
+}
+
+/* Кнопка сравнения */
+.compare-button.button {
+    display: none;
+    margin-top: 30px;
+    width: 200px;
+    align-self: center;
+    text-align: center;
+}
+
+/* Кнопка просмотра файла */
+.view-file-button.button {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+/* Кнопка "Назад" */
+.back-button.button {
+    position: absolute;
+    bottom: -60px;
+    left: 20px;
+    padding: 15px 30px;
+    border-radius: 25px;
+}
+
+/* Кнопки скачивания и просмотра ошибок */
+.download-button.button,
+.view-errors-button.button {
+    margin-bottom: 20px;
+}
+
+/* Кнопка закрытия модального окна */
+.close-button.button {
+    padding: 10px 20px;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+
+/* Переключатель темы */
+.theme-toggle.button {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    border-radius: 16px;
+    z-index: 1000;
+}
+
+/* Круглая кнопка для изображения */
+.image-toggle-button.button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    font-size: 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 2px 10px var(--shadow-color);
+    z-index: 1000;
+}
+
+/* Кнопка "Найти" */
+.search-button.button {
+    margin-top: 15px;
+}
+
+/* Кнопка "Подробнее" */
+.toggle-details.button {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-top: 15px;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+    margin: 10px auto;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }

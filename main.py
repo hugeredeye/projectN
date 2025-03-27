@@ -473,12 +473,18 @@ async def detailed_explain(
             "Анализ не найден"
         )
 
-        # Генерируем пояснение
-        raw_explanation = generate_detailed_explanation(
+        # Новое: получаем анализ из существующей карточки
+        card_analysis = next(
+            (item["analysis"] for item in session.result
+             if item["requirement"] == requirement),
+            "Анализ не найден"
+        )
+
+        explanation = generate_detailed_explanation(
             requirement=requirement,
             tz_content=tz_content,
             doc_content=doc_content,
-            card_analysis=card_analysis
+            card_analysis=card_analysis  # Передаем анализ
         )
 
         # Конвертируем Markdown в HTML
