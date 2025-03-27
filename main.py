@@ -6,7 +6,8 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Backgroun
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict
+import markdown2
+from typing import Dict, List
 from config import settings
 from rag_pipeline import generate_analysis, explain_point, generate_detailed_explanation
 from database import get_db, UploadedFile, ComparisonSession, db_manager, AsyncSessionLocal, create_tables, engine
@@ -42,6 +43,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.middleware("http")
 async def add_charset_middleware(request, call_next):
     response = await call_next(request)
@@ -49,10 +51,13 @@ async def add_charset_middleware(request, call_next):
         response.headers["Content-Type"] = "text/html; charset=utf-8"
     return response
 
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     with open("static/index.html", encoding='utf-8') as f:
         return f.read()
+
+
 @app.get("/view-file/{file_id}")
 async def view_file(file_id: int, db: AsyncSession = Depends(get_db)):
     """Эндпоинт для просмотра загруженного файла."""
@@ -87,6 +92,7 @@ async def view_file(file_id: int, db: AsyncSession = Depends(get_db)):
         logger.error(f"Ошибка при просмотре файла: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/file-info/{file_id}")
 async def get_file_info(file_id: int, db: AsyncSession = Depends(get_db)):
     """Эндпоинт для получения информации о файле."""
@@ -115,11 +121,13 @@ async def get_file_info(file_id: int, db: AsyncSession = Depends(get_db)):
 async def processing_page():
     return FileResponse("static/processing.html")
 
+
 @app.on_event("startup")
 async def startup_event():
     await create_tables(engine)
     asyncio.create_task(cleanup_task())
     asyncio.create_task(calculate_storage_stats())
+
 
 async def calculate_md5(file_path: str) -> str:
     md5_hash = hashlib.md5()
@@ -128,11 +136,13 @@ async def calculate_md5(file_path: str) -> str:
             md5_hash.update(chunk)
     return md5_hash.hexdigest()
 
+
 def validate_document_size(file: UploadFile, max_size: int = 10 * 1024 * 1024) -> bool:
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)
     return file_size <= max_size
+
 
 @app.post("/upload")
 async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
@@ -146,10 +156,10 @@ async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
 
         content = await file.read()
         logger.info(f"Получен файл {file.filename}, размер: {len(content)} байт")
-        
+
         with open(file_path, "wb") as buffer:
             buffer.write(content)
-        
+
         if not os.path.exists(file_path):
             logger.error(f"Файл не был сохранён: {file_path}")
             raise HTTPException(status_code=500, detail="Не удалось сохранить файл")
@@ -206,6 +216,7 @@ async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
             os.remove(file_path)  # Удаляем файл, если он был создан, но произошла ошибка
         raise HTTPException(status_code=400, detail=str(e))
 
+
 async def read_file_content(file_id: int, db: AsyncSession = Depends(get_db)) -> Dict:
     query = select(UploadedFile).where(UploadedFile.id == file_id)
     result = await db.execute(query)
@@ -235,6 +246,7 @@ async def read_file_content(file_id: int, db: AsyncSession = Depends(get_db)) ->
         "raw_text": content,
         "requirements": content.split("\n")
     }
+
 
 @app.post("/compare")
 async def compare_documents(
@@ -279,7 +291,9 @@ async def compare_documents(
         logger.error(f"Ошибка при сравнении: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
-async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime, db: AsyncSession):
+
+async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime,
+                                 db: AsyncSession):
     try:
         logger.info(f"Начало обработки сессии {session_id}")
         tz_content = await read_file_content(tz_file_id, db)
@@ -309,6 +323,7 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
             session.status = "error"
             session.error_message = str(e)
             await db.commit()
+
 
 @app.get("/status/{session_id}")
 async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
@@ -344,7 +359,8 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
     except Exception as e:
         logger.error(f"Ошибка при получении статуса: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-    
+
+
 @app.post("/explain")
 async def explain_requirement(request: Dict[str, str], db: AsyncSession = Depends(get_db)):
     """Эндпоинт для получения пояснений по конкретному требованию."""
@@ -365,10 +381,65 @@ async def explain_requirement(request: Dict[str, str], db: AsyncSession = Depend
         logger.error(f"Ошибка при получении пояснения: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка при обработке запроса: {str(e)}")
 
+
 @app.post("/find-in-document")
 async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(get_db)):
     """Поиск требования в документации (заглушка)"""
     return {"status": "success", "message": "Функция в разработке"}
+
+
+def extract_document_structure(text: str) -> List[Dict]:
+    """Анализирует документ и возвращает оглавление с позициями"""
+    structure = []
+    # Для DOCX/TXT (пример для заголовков)
+    for match in re.finditer(r'(^#+\s+.+$)|(^Глава\s+\d+.+$)', text, re.MULTILINE):
+        title = match.group().strip()
+        level = len(match.group(1)) if match.group(1) else 2  # Уровень вложенности
+        structure.append({
+            "title": title,
+            "level": level,
+            "position": match.start(),
+            "end": match.end()
+        })
+    return structure
+
+@app.get("/api/doc-structure")
+async def get_doc_structure(
+    session_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Возвращает структуру документа для карты"""
+    session = await db.get(ComparisonSession, session_id)
+    doc_content = await read_file_content(session.doc_file_id, db)
+    return extract_document_structure(doc_content['raw_text'])
+@app.get("/api/doc-content")
+async def get_doc_content(
+    session_id: str,
+    pos: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Возвращает фрагмент документа с позиции"""
+    session = await db.get(ComparisonSession, session_id)
+    doc_content = await read_file_content(session.doc_file_id, db)
+    return doc_content['raw_text'][pos:pos+1000]  # Возвращаем 1000 символов с позиции
+
+@app.get("/api/find-in-doc")
+async def full_text_search(
+    text: str,
+    session_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Полнотекстовый поиск с подсветкой"""
+    session = await db.get(ComparisonSession, session_id)
+    doc_content = await read_file_content(session.doc_file_id, db)
+    matches = [m.span() for m in re.finditer(re.escape(text), doc_content['raw_text'], re.IGNORECASE)]
+    return {
+        "matches": [{
+            "text": doc_content['raw_text'][start:end],
+            "start": start,
+            "end": end
+        } for start, end in matches]
+    }
 
 
 @app.post("/detailed-explain")
@@ -376,12 +447,12 @@ async def detailed_explain(
         request: Dict[str, str],
         db: AsyncSession = Depends(get_db)
 ):
-    """Эндпоинт для детального пояснения"""
+    """Эндпоинт для детального пояснения с Markdown-форматированием"""
     try:
         requirement = request["requirement"]
         session_id = request["session_id"]
 
-        # Получаем сессию сравнения
+        # Получаем сессию
         session = await db.execute(
             select(ComparisonSession)
             .where(ComparisonSession.session_id == session_id)
@@ -391,26 +462,40 @@ async def detailed_explain(
         if not session:
             raise HTTPException(status_code=404, detail="Сессия не найдена")
 
-        # Получаем файлы
-        tz_file = await db.get(UploadedFile, session.tz_file_id)
-        doc_file = await db.get(UploadedFile, session.doc_file_id)
+        # Получаем содержимое файлов
+        tz_content = await read_file_content(session.tz_file_id, db)
+        doc_content = await read_file_content(session.doc_file_id, db)
 
-        # Читаем содержимое
-        tz_content = await read_file_content(tz_file.id, db)
-        doc_content = await read_file_content(doc_file.id, db)
-
-        # Генерируем пояснение
-        explanation = generate_detailed_explanation(
-            requirement=requirement,
-            tz_content=tz_content,
-            doc_content=doc_content
+        # Анализ из карточки
+        card_analysis = next(
+            (item["analysis"] for item in session.result
+             if item["requirement"] == requirement),
+            "Анализ не найден"
         )
 
-        return {"explanation": explanation}
+        # Генерируем пояснение
+        raw_explanation = generate_detailed_explanation(
+            requirement=requirement,
+            tz_content=tz_content,
+            doc_content=doc_content,
+            card_analysis=card_analysis
+        )
+
+        # Конвертируем Markdown в HTML
+        html_explanation = markdown2.markdown(
+            raw_explanation,
+            extras=["fenced-code-blocks", "tables", "spoiler"]
+        )
+
+        return JSONResponse(content={
+            "raw": raw_explanation,  # Оригинальный Markdown
+            "html": html_explanation  # Форматированный HTML
+        })
 
     except Exception as e:
         logger.error(f"Ошибка детального пояснения: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/download-report/{session_id}")
 async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
@@ -539,6 +624,7 @@ async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
         logger.error(f"Ошибка при создании отчета: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/errors/{session_id}")
 async def get_errors(session_id: str, db: AsyncSession = Depends(get_db)):
     try:
@@ -567,6 +653,7 @@ async def get_errors(session_id: str, db: AsyncSession = Depends(get_db)):
         logger.error(f"Ошибка при получении ошибок: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/stats")
 async def get_stats():
     try:
@@ -576,6 +663,7 @@ async def get_stats():
     except Exception as e:
         logger.error(f"Ошибка при получении статистики: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.delete("/files/{file_id}")
 async def delete_file(file_id: int, db: AsyncSession = Depends(get_db)):
@@ -597,6 +685,8 @@ async def delete_file(file_id: int, db: AsyncSession = Depends(get_db)):
         logger.error(f"Ошибка при удалении файла: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

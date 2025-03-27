@@ -294,11 +294,10 @@ async function checkStatus() {
                 const requirement = this.getAttribute('data-requirement');
                 const card = this.closest('.error-item');
 
-                // Добавляем индикатор загрузки
-                const loadingIndicator = document.createElement('div');
-                loadingIndicator.className = 'loading-explanation';
-                loadingIndicator.textContent = 'Анализируем...';
-                card.appendChild(loadingIndicator);
+                // Индикатор загрузки
+                const loader = document.createElement('div');
+                loader.className = 'loader';
+                card.appendChild(loader);
 
                 try {
                     const response = await fetch('/detailed-explain', {
@@ -312,15 +311,14 @@ async function checkStatus() {
 
                     const data = await response.json();
 
-                    // Создаем красивый вывод
+                    // Создаем красивый вывод с HTML
                     const explanationBox = document.createElement('div');
-                    explanationBox.className = 'detailed-explanation';
+                    explanationBox.className = 'explanation-box';
                     explanationBox.innerHTML = `
-                        <h4>🔍 Детальный анализ:</h4>
-                        ${formatExplanation(data.explanation)}
+                        <h4>🔍 Подробный анализ</h4>
+                        <div class="markdown-content">${data.html}</div>
                         <button class="close-explanation">Скрыть</button>
                     `;
-
                     card.appendChild(explanationBox);
 
                     // Обработчик закрытия
@@ -329,10 +327,10 @@ async function checkStatus() {
                     });
 
                 } catch (error) {
-                    alert('Ошибка при анализе');
+                    alert('Ошибка при генерации пояснения');
                     console.error(error);
                 } finally {
-                    loadingIndicator.remove();
+                    loader.remove();
                 }
             });
         });
@@ -348,9 +346,10 @@ async function checkStatus() {
         }
 
         // 6. Обработчик "Показать в документации" (заглушка)
-        modal.querySelectorAll('.show-in-doc-button').forEach(button => {
-            button.addEventListener('click', function() {
-                alert('Функция "Показать в документации" будет реализована позже');
+        document.querySelectorAll('.show-in-doc-button').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const requirement = this.getAttribute('data-requirement');
+                showDocumentMap(sessionId, requirement);  // Открываем карту с поиском
             });
         });
 
@@ -366,3 +365,72 @@ async function checkStatus() {
         localStorage.removeItem('processing_session_id');
     });
 });
+async function showDocumentMap(sessionId, searchText = null) {
+  // 1. Получаем структуру документа
+  const response = await fetch(`/api/doc-structure?session_id=${sessionId}`);
+  const structure = await response.json();
+
+  // 2. Создаем модальное окно с картой
+  const modal = document.createElement('div');
+  modal.className = 'doc-map-modal';
+  modal.innerHTML = `
+    <div class="doc-map-container">
+      <h3>Карта документа</h3>
+      <div class="doc-map-navigation">
+        ${structure.map(item => `
+          <div class="doc-map-item"
+               data-level="${item.level}"
+               data-pos="${item.position}"
+               style="padding-left: ${item.level * 15}px">
+            ${item.title}
+          </div>
+        `).join('')}
+      </div>
+      <div class="doc-map-preview">
+        <pre id="doc-content-preview">Выберите раздел...</pre>
+      </div>
+      <input type="text" id="doc-search" placeholder="Поиск в документе" value="${searchText || ''}">
+      <button id="doc-search-btn">Найти</button>
+    </div>
+  `;
+
+  // 3. Обработчики событий
+  modal.querySelectorAll('.doc-map-item').forEach(item => {
+    item.addEventListener('click', async () => {
+      const pos = item.getAttribute('data-pos');
+      const content = await loadDocumentSection(sessionId, pos);
+      modal.querySelector('#doc-content-preview').textContent = content;
+    });
+  });
+
+  // 4. Поиск по документу
+  modal.querySelector('#doc-search-btn').addEventListener('click', async () => {
+    const query = modal.querySelector('#doc-search').value;
+    if (query) {
+      const results = await searchInDocument(sessionId, query);
+      highlightResults(modal, results);
+    }
+  });
+
+  document.body.appendChild(modal);
+}
+
+async function loadDocumentSection(sessionId, position) {
+  const response = await fetch(`/api/doc-content?session_id=${sessionId}&pos=${position}`);
+  return await response.text();
+}
+
+async function searchInDocument(sessionId, query) {
+  const response = await fetch(`/api/find-in-doc?session_id=${sessionId}&text=${encodeURIComponent(query)}`);
+  return await response.json();
+}
+
+function highlightResults(modal, results) {
+  const preview = modal.querySelector('#doc-content-preview');
+  let content = preview.textContent;
+  results.matches.forEach(match => {
+    content = content.replace(new RegExp(match.text, 'gi'),
+      `<span class="highlight">${match.text}</span>`);
+  });
+  preview.innerHTML = content;
+}

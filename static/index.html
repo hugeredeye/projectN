@@ -50,5 +50,12 @@
     <script src="/static/js/script.js"></script>
     <!-- В head добавим preconnect для ускорения загрузки -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script>
+        // Инициализация воркера
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    </script>
 </body>
 </html>

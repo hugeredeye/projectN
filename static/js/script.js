@@ -167,39 +167,41 @@ async function showFileContent(file, fileName) {
                 <button class="close-modal">&times;</button>
             </div>
             <div class="file-content-container">
-                <div class="file-content-loading">Загрузка...</div>
-                <pre class="file-content" style="display:none"></pre>
+                ${file.type === 'application/pdf' ?
+                    '<div class="pdf-viewer-container"></div>' :
+                    '<pre class="file-content">Загрузка...</pre>'
+                }
             </div>
         </div>
     `;
 
     document.body.appendChild(modal);
-    const contentElement = modal.querySelector('.file-content');
-    const loadingElement = modal.querySelector('.file-content-loading');
+    const container = modal.querySelector('.file-content-container');
 
-    modal.querySelector('.close-modal').addEventListener('click', () => {
-        modal.remove();
-    });
+    // Закрытие модалки
+    modal.querySelector('.close-modal').addEventListener('click', () => modal.remove());
 
     try {
-        let content = '';
+        if (file.type === 'application/pdf') {
+            // Вариант 1: Используем <embed> (надежный стандартный способ)
+            const embed = document.createElement('embed');
+            embed.className = 'pdf-embed';
+            embed.src = URL.createObjectURL(file);
+            embed.type = 'application/pdf';
+            container.querySelector('.pdf-viewer-container').appendChild(embed);
 
-        if (file.type === 'text/plain') {
-            content = await file.text();
-        } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-            content = await readDocxFile(file);
+            // Вариант 2: PDF.js (для кастомного интерфейса)
+            // await renderPdfWithJs(file, container);
         } else {
-            modal.remove();
-            window.open(URL.createObjectURL(file), '_blank');
-            return;
+            // Существующая обработка TXT/DOCX
+            const content = file.type === 'text/plain'
+                ? await file.text()
+                : await readDocxFile(file);
+            container.querySelector('pre').textContent = content;
         }
-
-        loadingElement.style.display = 'none';
-        contentElement.textContent = content;
-        contentElement.style.display = 'block';
     } catch (error) {
-        console.error('Ошибка чтения файла:', error);
-        loadingElement.textContent = 'Ошибка загрузки содержимого файла';
+        container.innerHTML = `<p class="error">Ошибка: ${error.message}</p>`;
+        console.error(error);
     }
 }
 
