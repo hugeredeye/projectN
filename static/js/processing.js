@@ -301,14 +301,20 @@ async function checkStatus() {
                 card.appendChild(loadingIndicator);
 
                 try {
-                    const response = await fetch('/detailed-explain', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            requirement: requirement,
-                            session_id: sessionId
-                        })
-                    });
+                    // В обработчике кнопки "Пояснить":
+                const cardAnalysis = this.closest('.error-item')
+                    .querySelector('p:last-child').textContent
+                    .replace('Анализ:', '').trim();
+
+                const response = await fetch('/detailed-explain', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        requirement: requirement,
+                        session_id: sessionId,
+                        card_analysis: cardAnalysis  // Добавляем анализ
+                    })
+                });
 
                     const data = await response.json();
 

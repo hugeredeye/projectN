@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
-    <button class="theme-toggle" id="theme-toggle">Темная тема</button>
+    <button class="theme-toggle button" id="theme-toggle">Темная тема</button>
     <div class="container">
         <div class="result-card">
             <h1>Идет составление отчета</h1>
@@ -15,14 +15,13 @@
             <div id="error-report" class="response-container">
                 <div class="response-content">
                     <p>Ваш отчет в процессе обработки.</p>
+                    <div class="spinner"></div>
                 </div>
             </div>
-
-            <button class="download-button" disabled>
+            <button class="download-button button" disabled>
                 Скачать отчет с исправлениями
             </button>
-
-            <button class="view-errors-button" disabled>
+            <button class="view-errors-button button" disabled>
                 Посмотреть отчет об ошибках
             </button>
         </div>

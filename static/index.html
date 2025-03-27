@@ -6,49 +6,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Загрузка ТЗ и документации</title>
     <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
 </head>
 <body>
-    <button class="theme-toggle" id="theme-toggle">Темная тема</button>
+    <button class="theme-toggle button" id="theme-toggle">Темная тема</button>
     <div class="container">
-    <div class="upload-card">
-        <h1>Загрузка ТЗ и документации</h1>
-
-        <button class="upload-button" onclick="document.getElementById('tz-input').click()">
-            добавить ТЗ
+        <div class="upload-card">
+            <h1>Загрузка ТЗ и документации</h1>
+            <button class="upload-button button" onclick="document.getElementById('tz-input').click()">
+                добавить ТЗ
+            </button>
+            <input type="file" id="tz-input" hidden accept=".docx,.pdf,.txt">
+            <button class="upload-button button" onclick="document.getElementById('doc-input').click()">
+                добавить документацию
+            </button>
+            <input type="file" id="doc-input" hidden accept=".docx,.pdf,.txt">
+        </div>
+        <div id="uploaded-files" class="uploaded-files" style="display: none;">
+            <p>Загруженные файлы:</p>
+            <div id="file-list"></div>
+        </div>
+        <button id="compare-button" class="compare-button button" style="display: none;">
+            Сравнение
         </button>
-        <input type="file" id="tz-input" hidden accept=".docx,.pdf,.txt">
-
-        <button class="upload-button" onclick="document.getElementById('doc-input').click()">
-            добавить документацию
-        </button>
-        <input type="file" id="doc-input" hidden accept=".docx,.pdf,.txt">
     </div>
-
-    <div id="uploaded-files" class="uploaded-files" style="display: none;">
-        <p>Загруженные файлы:</p>
-        <div id="file-list"></div>
-    </div>
-
-    <button id="compare-button" class="compare-button" style="display: none;">
-        Сравнение
-    </button>
-</div>
     <div id="error-report" class="error-report">
         <p>Ошибка: файл не загружен.</p>
     </div>
-
-    <!-- Добавляем круглую кнопку в правый нижний угол -->
-    <button class="image-toggle-button" id="image-toggle-button">🎀</button>
-
-    <!-- Контейнер для квадратного изображения -->
+    <button class="image-toggle-button button" id="image-toggle-button" aria-label="Открыть изображение">🎀</button>
     <div class="image-modal" id="image-modal" style="display: none;">
         <div class="image-modal-content">
             <img src="/uploads/Снимок экрана 2025-03-20 в 19.00.21.png">
         </div>
     </div>
-    <!-- Заменим блок uploaded-files на этот: -->
     <script src="/static/js/script.js"></script>
-    <!-- В head добавим preconnect для ускорения загрузки -->
-    <link rel="preconnect" href="https://cdn.jsdelivr.net">
 </body>
 </html>

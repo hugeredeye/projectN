@@ -44,29 +44,44 @@ comparison_prompt = PromptTemplate(
 )
 # Добавляем новый шаблон для детального анализа
 detailed_explanation_prompt = PromptTemplate(
-    input_variables=["requirement", "tz_text", "doc_text"],
-    template="""**Задача:** Проведи детальный анализ несоответствия между требованием и документацией.
+    input_variables=["requirement", "tz_text", "doc_text", "card_analysis"],
+    template="""**Детальный анализ несоответствия** (на основе ТЗ, документации и автоматического анализа)
 
-**Требование из ТЗ:**
+**Исходное требование:**  
 {requirement}
 
-**Фрагмент ТЗ:**
+**Контекст из ТЗ:**  
 {tz_text}
 
-**Фрагмент документации:**
+**Контекст из документации:**  
 {doc_text}
 
-**Анализ:**
-1. Укажи конкретные пункты несоответствия
-2. Объясни причину (техническую/логическую)
-3. Предложи способ исправления
-4. Оцени критичность (1-5 баллов)
+**Предварительный анализ системы:**  
+{card_analysis}
 
-**Формат вывода:**
-- Несоответствие: [текст]
-- Причина: [текст] 
-- Рекомендация: [текст]
-- Критичность: [число]/5"""
+**Подробный разбор:**  
+1. **Разбор несоответствия** (по пунктам):
+   - Сравнение формулировок
+   - Технические противоречия
+   - Возможные причины расхождения
+
+2. **Рекомендации**:
+   - Как исправить в документации?
+   - Нужно ли корректировать ТЗ?
+
+3. **Дополнительные риски** (если есть)
+
+**Формат вывода (Markdown):**  
+```markdown
+### Разбор несоответствия
+- [конкретные пункты]
+
+### Рекомендации
+- [действия]
+
+### Критичность
+- [число]/5
+```"""
 )
 
 
@@ -343,27 +358,36 @@ def find_most_relevant_chunk(query: str, text: str, chunk_size: int = 1000) -> s
         return text[:chunk_size]  # Возвращаем начало текста при ошибке
 
 
-def generate_detailed_explanation(requirement: str, tz_content: Dict, doc_content: Dict) -> str:
-    """Генерация детального пояснения с поиском релевантных фрагментов"""
-    try:
-        # 1. Находим релевантные чанки
-        tz_chunk = find_most_relevant_chunk(requirement, tz_content['raw_text'])
-        doc_chunk = find_most_relevant_chunk(requirement, doc_content['raw_text'])
+def generate_detailed_explanation(
+        requirement: str,
+        tz_content: Dict,
+        doc_content: Dict,
+        card_analysis: str
+) -> str:
+    """
+    Отдельная функция для генерации пояснения.
 
-        # 2. Генерация пояснения (существующий промпт)
-        response = rag_pipeline.llm.invoke(
-            detailed_explanation_prompt.format(
-                requirement=requirement,
-                tz_text=tz_chunk[:5000],  # Ограничиваем объем
-                doc_text=doc_chunk[:5000]
-            )
-        )
+    Параметры:
+        llm: Языковая модель (например ChatGroq)
+        requirement: Текст требования
+        tz_content: Содержимое ТЗ {'raw_text': str}
+        doc_content: Содержимое документации {'raw_text': str}
+        card_analysis: Предварительный анализ из карточки
+    """
+    # Ищем релевантные фрагменты
+    tz_chunk = find_most_relevant_chunk(requirement, tz_content['raw_text'])
+    doc_chunk = find_most_relevant_chunk(requirement, doc_content['raw_text'])
 
-        return response.content
 
-    except Exception as e:
-        logger.error(f"Ошибка генерации пояснения: {str(e)}")
-        return f"Не удалось сгенерировать пояснение: {str(e)}"
+    # Генерация ответа
+    response = rag_pipeline.llm.invoke(detailed_explanation_prompt.format(
+        requirement=requirement,
+        tz_text=tz_chunk[:1500],
+        doc_text=doc_chunk[:1500],
+        card_analysis=card_analysis
+    ))
+
+    return response.content
 
 
 def explain_point(point: str) -> str:

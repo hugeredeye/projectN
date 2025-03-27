@@ -42,6 +42,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.middleware("http")
 async def add_charset_middleware(request, call_next):
     response = await call_next(request)
@@ -49,10 +50,13 @@ async def add_charset_middleware(request, call_next):
         response.headers["Content-Type"] = "text/html; charset=utf-8"
     return response
 
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     with open("static/index.html", encoding='utf-8') as f:
         return f.read()
+
+
 @app.get("/view-file/{file_id}")
 async def view_file(file_id: int, db: AsyncSession = Depends(get_db)):
     """Эндпоинт для просмотра загруженного файла."""
@@ -87,6 +91,7 @@ async def view_file(file_id: int, db: AsyncSession = Depends(get_db)):
         logger.error(f"Ошибка при просмотре файла: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/file-info/{file_id}")
 async def get_file_info(file_id: int, db: AsyncSession = Depends(get_db)):
     """Эндпоинт для получения информации о файле."""
@@ -115,11 +120,13 @@ async def get_file_info(file_id: int, db: AsyncSession = Depends(get_db)):
 async def processing_page():
     return FileResponse("static/processing.html")
 
+
 @app.on_event("startup")
 async def startup_event():
     await create_tables(engine)
     asyncio.create_task(cleanup_task())
     asyncio.create_task(calculate_storage_stats())
+
 
 async def calculate_md5(file_path: str) -> str:
     md5_hash = hashlib.md5()
@@ -128,11 +135,13 @@ async def calculate_md5(file_path: str) -> str:
             md5_hash.update(chunk)
     return md5_hash.hexdigest()
 
+
 def validate_document_size(file: UploadFile, max_size: int = 10 * 1024 * 1024) -> bool:
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)
     return file_size <= max_size
+
 
 @app.post("/upload")
 async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
@@ -146,10 +155,10 @@ async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
 
         content = await file.read()
         logger.info(f"Получен файл {file.filename}, размер: {len(content)} байт")
-        
+
         with open(file_path, "wb") as buffer:
             buffer.write(content)
-        
+
         if not os.path.exists(file_path):
             logger.error(f"Файл не был сохранён: {file_path}")
             raise HTTPException(status_code=500, detail="Не удалось сохранить файл")
@@ -206,6 +215,7 @@ async def upload_file(file: UploadFile, db: AsyncSession = Depends(get_db)):
             os.remove(file_path)  # Удаляем файл, если он был создан, но произошла ошибка
         raise HTTPException(status_code=400, detail=str(e))
 
+
 async def read_file_content(file_id: int, db: AsyncSession = Depends(get_db)) -> Dict:
     query = select(UploadedFile).where(UploadedFile.id == file_id)
     result = await db.execute(query)
@@ -235,6 +245,7 @@ async def read_file_content(file_id: int, db: AsyncSession = Depends(get_db)) ->
         "raw_text": content,
         "requirements": content.split("\n")
     }
+
 
 @app.post("/compare")
 async def compare_documents(
@@ -279,7 +290,9 @@ async def compare_documents(
         logger.error(f"Ошибка при сравнении: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
-async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime, db: AsyncSession):
+
+async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: int, start_time: datetime,
+                                 db: AsyncSession):
     try:
         logger.info(f"Начало обработки сессии {session_id}")
         tz_content = await read_file_content(tz_file_id, db)
@@ -309,6 +322,7 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
             session.status = "error"
             session.error_message = str(e)
             await db.commit()
+
 
 @app.get("/status/{session_id}")
 async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
@@ -344,7 +358,8 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
     except Exception as e:
         logger.error(f"Ошибка при получении статуса: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-    
+
+
 @app.post("/explain")
 async def explain_requirement(request: Dict[str, str], db: AsyncSession = Depends(get_db)):
     """Эндпоинт для получения пояснений по конкретному требованию."""
@@ -364,6 +379,7 @@ async def explain_requirement(request: Dict[str, str], db: AsyncSession = Depend
     except Exception as e:
         logger.error(f"Ошибка при получении пояснения: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка при обработке запроса: {str(e)}")
+
 
 @app.post("/find-in-document")
 async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(get_db)):
@@ -399,11 +415,18 @@ async def detailed_explain(
         tz_content = await read_file_content(tz_file.id, db)
         doc_content = await read_file_content(doc_file.id, db)
 
-        # Генерируем пояснение
+        # Новое: получаем анализ из существующей карточки
+        card_analysis = next(
+            (item["analysis"] for item in session.result
+             if item["requirement"] == requirement),
+            "Анализ не найден"
+        )
+
         explanation = generate_detailed_explanation(
             requirement=requirement,
             tz_content=tz_content,
-            doc_content=doc_content
+            doc_content=doc_content,
+            card_analysis=card_analysis  # Передаем анализ
         )
 
         return {"explanation": explanation}
@@ -411,6 +434,7 @@ async def detailed_explain(
     except Exception as e:
         logger.error(f"Ошибка детального пояснения: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/download-report/{session_id}")
 async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
@@ -539,6 +563,7 @@ async def download_report(session_id: str, db: AsyncSession = Depends(get_db)):
         logger.error(f"Ошибка при создании отчета: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/errors/{session_id}")
 async def get_errors(session_id: str, db: AsyncSession = Depends(get_db)):
     try:
@@ -567,6 +592,7 @@ async def get_errors(session_id: str, db: AsyncSession = Depends(get_db)):
         logger.error(f"Ошибка при получении ошибок: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/stats")
 async def get_stats():
     try:
@@ -576,6 +602,7 @@ async def get_stats():
     except Exception as e:
         logger.error(f"Ошибка при получении статистики: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.delete("/files/{file_id}")
 async def delete_file(file_id: int, db: AsyncSession = Depends(get_db)):
@@ -597,6 +624,8 @@ async def delete_file(file_id: int, db: AsyncSession = Depends(get_db)):
         logger.error(f"Ошибка при удалении файла: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
