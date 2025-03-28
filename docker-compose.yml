@@ -1,3 +1,4 @@
+version: '3.8'
 
 services:
   app:
@@ -16,6 +17,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    cap_add:
+      - NET_ADMIN  # Необходимо для работы с сетевыми настройками для OpenVPN
+    privileged: true  # Дает дополнительные привилегии для работы с сетевыми интерфейсами
+    sysctls:
+      - net.ipv4.ip_forward=1  # Включение перенаправления IP для VPN
+    dns:
+      - 8.8.8.8  # Google DNS
+      - 1.1.1.1  # Cloudflare DNS
 
   db:
     image: postgres:15
@@ -44,4 +53,4 @@ services:
       - db
 
 volumes:
-  postgres_data: 
+  postgres_data:

@@ -1,11 +1,17 @@
+# Используем официальный образ Python
 FROM python:3.11-slim
 
 # Устанавливаем рабочую директорию
 WORKDIR /app
+COPY . /app
 
-# Настройка репозиториев и установка пакетов в один слой
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# Настройка репозиториев и установка пакетов
+RUN echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries \
+    && echo "deb http://mirror.yandex.ru/debian/ bookworm main" > /etc/apt/sources.list \
+    && echo "deb http://mirror.yandex.ru/debian-security/ bookworm-security main" >> /etc/apt/sources.list \
+    && echo "deb http://mirror.yandex.ru/debian/ bookworm-updates main" >> /etc/apt/sources.list \
+    && apt-get update \
+    && apt-get install -y \
         antiword \
         build-essential \
         python3-dev \
@@ -15,38 +21,40 @@ RUN apt-get update && \
         iptables \
         net-tools \
         iproute2 \
-        curl && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Копируем конфигурационные файлы VPN
-COPY turk5_247479803.ovpn /etc/openvpn/
-COPY vpn-up.sh /etc/openvpn/
-RUN chmod 600 /etc/openvpn/turk5_247479803.ovpn && \
-    chmod +x /etc/openvpn/vpn-up.sh && \
-    touch /var/log/openvpn.log && \
-    chmod 666 /var/log/openvpn.log
+        curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Копируем файлы зависимостей
-COPY requirements.txt /app/
+COPY requirements.txt .
 
 # Устанавливаем зависимости Python
-# Используем pip 24.0 для совместимости с textract 1.6.5
-RUN pip install --no-cache-dir pip==24.0 && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Копируем остальные файлы проекта
+COPY . .
 
 # Создаем необходимые директории
-RUN mkdir -p /app/uploads /app/logs /app/vector_db
+RUN mkdir -p uploads logs vector_db
 
-# Копируем файлы проекта
-COPY . /app/
-COPY start.sh /app/
+# Копируем конфигурационный файл VPN и даем разрешения
+COPY turk5_247479803.ovpn /etc/openvpn/
+RUN chmod 600 /etc/openvpn/turk5_247479803.ovpn
+
+# Копируем скрипт для настройки DNS и даем разрешения
+COPY vpn-up.sh /etc/openvpn/vpn-up.sh
+RUN chmod +x /etc/openvpn/vpn-up.sh
+
+# Создаем файл для логов OpenVPN
+RUN touch /var/log/openvpn.log && chmod 666 /var/log/openvpn.log
+
+# Копируем скрипт запуска и даем ему права на выполнение
+COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
 # Устанавливаем переменные окружения
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    GROQ_API_KEY=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
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV GROQ_API_KEY=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
 
 # Открываем порт
 EXPOSE 8000
