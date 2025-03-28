@@ -1438,3 +1438,39 @@ canvas {
     font-style: italic;
     margin: 10px 0;
 }
+
+/* Стили для кнопок "Пояснить" и "Показать в документации" */
+.explain-button.button,
+.show-in-doc-button.button {
+    padding: 8px 16px; /* Меньше, чем у стандартных кнопок (12px 24px) */
+    font-size: 14px; /* Меньше, чем у стандартных кнопок (16px) */
+    border-radius: 12px; /* Чуть меньше закругление (16px у стандартных) */
+}
+
+/* Контейнер для кнопок */
+.action-buttons {
+    display: flex;
+    gap: 10px; /* Расстояние между кнопками */
+    margin-top: 15px;
+}
+
+.detailed-explanation {
+    background-color: #f8f9fa;
+    border-left: 3px solid #4CAF50;
+    padding: 15px;
+    margin-top: 10px;
+    border-radius: 0 4px 4px 0;
+    animation: fadeIn 0.5s ease;
+    color: var(--text-color);
+}
+
+.dark-theme .detailed-explanation {
+    background-color: #2a2a2a;
+    border-left-color: #388E3C;
+    color: var(--text-color);
+}
+
+.detailed-explanation h4,
+.detailed-explanation strong {
+    color: var(--text-color);
+}

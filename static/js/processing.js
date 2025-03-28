@@ -43,6 +43,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+function normalizeAlignment() {
+    const errorItems = document.querySelectorAll('.error-item');
+    errorItems.forEach(item => {
+        // Устанавливаем text-align: left для самого .error-item
+        item.style.textAlign = 'left';
+
+        // Устанавливаем text-align: left для всех дочерних элементов
+        const statusElements = item.querySelectorAll('.status');
+        statusElements.forEach(status => {
+            status.style.textAlign = 'left';
+        });
+
+        const paragraphs = item.querySelectorAll('p');
+        paragraphs.forEach(p => {
+            p.style.textAlign = 'left';
+        });
+    });
+}
+
 async function checkStatus() {
     try {
         const response = await fetch(`/status/${sessionId}`);
@@ -147,10 +166,10 @@ async function checkStatus() {
                                 <p><strong>Критичность:</strong> ${error.criticality}</p>
                                 <p><strong>Анализ:</strong> ${error.analysis}</p>
                                 <div class="action-buttons">
-                                    <button class="explain-button" data-requirement="${error.requirement}">
+                                    <button class="explain-button button" data-requirement="${error.requirement}">
                                         Пояснить
                                     </button>
-                                    <button class="show-in-doc-button" data-requirement="${error.requirement}">
+                                    <button class="show-in-doc-button button" data-requirement="${error.requirement}">
                                         Показать в документации
                                     </button>
                                 </div>
@@ -262,6 +281,8 @@ async function checkStatus() {
             if (!foundItems) {
                 alert('По вашему запросу ничего не найдено');
             }
+
+            normalizeAlignment();
         }
 
         // 3. Обработчики событий (существующий код)
