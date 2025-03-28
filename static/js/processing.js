@@ -353,12 +353,79 @@ async function checkStatus() {
                 .replace(/\n/g, '<br>');
         }
 
-        // 6. Обработчик "Показать в документации" (заглушка)
-        modal.querySelectorAll('.show-in-doc-button').forEach(button => {
-            button.addEventListener('click', function() {
-                alert('Функция "Показать в документации" будет реализована позже');
+        // 6.Обработчик кнопки "Показать в документации"
+        document.querySelectorAll('.show-in-doc-button').forEach(button => {
+            button.addEventListener('click', async function() {
+                const requirement = this.getAttribute('data-requirement');
+                const card = this.closest('.error-item');
+
+                // Создаем индикатор загрузки
+                const loader = document.createElement('div');
+                loader.className = 'doc-search-loading';
+                loader.textContent = 'Ищем в документации...';
+                card.appendChild(loader);
+
+                try {
+                    const response = await fetch('/find-in-document', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            requirement: requirement,
+                            session_id: sessionId
+                        })
+                    });
+                    const data = await response.json();
+
+                    if (!data.found) {
+                        alert('Текст не найден в документации');
+                        return;
+                    }
+
+                    // Создаем модальное окно с результатами
+                    const modal = document.createElement('div');
+                    modal.className = 'doc-search-modal';
+                    modal.innerHTML = `
+                        <div class="doc-search-content">
+                            <h3>Найдено в документации</h3>
+                            <div class="doc-context">
+                                ${highlightMatches(data.results[0].content, data.matches)}
+                            </div>
+                            <button class="close-doc-search">Закрыть</button>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+
+                    // Обработчики закрытия
+                    modal.querySelector('.close-doc-search').addEventListener('click', () => modal.remove());
+                    modal.addEventListener('click', (e) => {
+                        if (e.target === modal) modal.remove();
+                    });
+
+                } catch (error) {
+                    alert('Ошибка поиска');
+                    console.error(error);
+                } finally {
+                    loader.remove();
+                }
             });
         });
+
+        // Функция подсветки совпадений
+        function highlightMatches(text, matches) {
+            if (!matches || matches.length === 0) return text;
+
+            let result = '';
+            let lastPos = 0;
+
+            matches.forEach(([start, end]) => {
+                result += text.slice(lastPos, start);
+                result += `<span class="text-match">${text.slice(start, end)}</span>`;
+                lastPos = end;
+            });
+
+            result += text.slice(lastPos);
+            return result;
+        }
 
     } catch (error) {
         alert('Ошибка при получении отчета об ошибках');

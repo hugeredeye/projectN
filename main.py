@@ -383,8 +383,63 @@ async def explain_requirement(request: Dict[str, str], db: AsyncSession = Depend
 
 @app.post("/find-in-document")
 async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(get_db)):
-    """Поиск требования в документации (заглушка)"""
-    return {"status": "success", "message": "Функция в разработке"}
+    """Поиск требования в документации с использованием FAISS"""
+    try:
+        requirement = request.get("requirement")
+        session_id = request.get("session_id")
+
+        if not requirement or not session_id:
+            raise HTTPException(status_code=400, detail="Не указано требование или ID сессии")
+
+        # Получаем сессию сравнения
+        session = await db.execute(
+            select(ComparisonSession)
+            .where(ComparisonSession.session_id == session_id)
+        )
+        session = session.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Сессия не найдена")
+
+        # Получаем файл документации
+        doc_file = await db.get(UploadedFile, session.doc_file_id)
+        if not doc_file:
+            raise HTTPException(status_code=404, detail="Файл документации не найден")
+
+        # Загружаем векторное хранилище для документации
+        doc_faiss_path = os.path.join(settings.VECTOR_DB_PATH, "doc_faiss")
+        if not os.path.exists(doc_faiss_path):
+            raise HTTPException(status_code=404, detail="Векторное хранилище не найдено")
+
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        doc_vectorstore = FAISS.load_local(doc_faiss_path, embeddings)
+
+        # Ищем наиболее релевантные фрагменты
+        docs = doc_vectorstore.similarity_search(requirement, k=3)
+
+        if not docs:
+            return {"status": "success", "found": False, "message": "Требование не найдено в документации"}
+
+        # Формируем результаты
+        results = []
+        for doc in docs:
+            results.append({
+                "content": doc.page_content,
+                "source": doc.metadata.get("source", "unknown"),
+                "chunk_id": doc.metadata.get("chunk_id", 0)
+            })
+
+        return {
+            "status": "success",
+            "found": True,
+            "results": results,
+            "matches": [(m.start(), m.end()) for m in
+                        re.finditer(re.escape(requirement), results[0]["content"], re.IGNORECASE)]
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка поиска в документации: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/detailed-explain")
