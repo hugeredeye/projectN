@@ -156,7 +156,45 @@ function hideError() {
         errorReport.style.display = 'none';
     }
 }
-// Добавим новую функцию для отображения содержимого файла
+
+// Функция для экранирования HTML
+function escapeHtml(unsafe) {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// Функция для чтения DOCX файлов
+async function readDocxFile(file) {
+    try {
+        // Используем mammoth.js для чтения DOCX с сохранением форматирования
+        const mammoth = await import('https://cdn.jsdelivr.net/npm/mammoth@1.4.0/+esm');
+        const arrayBuffer = await file.arrayBuffer();
+
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        return result.value; // Возвращаем HTML с форматированием
+    } catch (error) {
+        console.error('Ошибка чтения DOCX:', error);
+        return 'Не удалось прочитать содержимое DOCX файла';
+    }
+}
+
+// Функция для обработки markdown
+async function processMarkdown(content) {
+    try {
+        // Используем marked.js для преобразования markdown в HTML
+        const marked = await import('https://cdn.jsdelivr.net/npm/marked@4.0.0/+esm');
+        return marked.parse(content);
+    } catch (error) {
+        console.error('Ошибка обработки markdown:', error);
+        return content;
+    }
+}
+
+// Обновим функцию showFileContent
 async function showFileContent(file, fileName) {
     const modal = document.createElement('div');
     modal.className = 'file-modal';
@@ -168,7 +206,7 @@ async function showFileContent(file, fileName) {
             </div>
             <div class="file-content-container">
                 <div class="file-content-loading">Загрузка...</div>
-                <pre class="file-content" style="display:none"></pre>
+                <div class="file-content" style="display:none"></div>
             </div>
         </div>
     `;
@@ -177,8 +215,16 @@ async function showFileContent(file, fileName) {
     const contentElement = modal.querySelector('.file-content');
     const loadingElement = modal.querySelector('.file-content-loading');
 
+    // Закрытие по клику на кнопку
     modal.querySelector('.close-modal').addEventListener('click', () => {
         modal.remove();
+    });
+
+    // Закрытие по клику вне модального окна
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
     });
 
     try {
@@ -186,35 +232,36 @@ async function showFileContent(file, fileName) {
 
         if (file.type === 'text/plain') {
             content = await file.text();
+            // Проверяем, является ли файл markdown
+            if (fileName.toLowerCase().endsWith('.md')) {
+                content = await processMarkdown(content);
+                contentElement.innerHTML = `<div class="markdown-content">${content}</div>`;
+            } else {
+                contentElement.innerHTML = `<pre class="text-content">${escapeHtml(content)}</pre>`;
+            }
         } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
             content = await readDocxFile(file);
+            contentElement.innerHTML = `<div class="docx-content">${content}</div>`;
+        } else if (file.type === 'application/pdf') {
+            // Для PDF создаем iframe
+            const fileUrl = URL.createObjectURL(file);
+            contentElement.innerHTML = `
+                <iframe 
+                    src="${fileUrl}" 
+                    style="width: 100%; height: 100%; min-height: 500px; border: none;"
+                    title="PDF Viewer">
+                </iframe>
+            `;
         } else {
-            modal.remove();
-            window.open(URL.createObjectURL(file), '_blank');
-            return;
+            throw new Error('Неподдерживаемый формат файла');
         }
 
         loadingElement.style.display = 'none';
-        contentElement.textContent = content;
         contentElement.style.display = 'block';
     } catch (error) {
         console.error('Ошибка чтения файла:', error);
         loadingElement.textContent = 'Ошибка загрузки содержимого файла';
-    }
-}
-
-// Функция для чтения DOCX файлов
-async function readDocxFile(file) {
-    try {
-        // Используем mammoth.js для чтения DOCX - он проще и надежнее
-        const mammoth = await import('https://cdn.jsdelivr.net/npm/mammoth@1.4.0/+esm');
-        const arrayBuffer = await file.arrayBuffer();
-
-        const result = await mammoth.extractRawText({ arrayBuffer });
-        return result.value; // Возвращаем извлеченный текст
-    } catch (error) {
-        console.error('Ошибка чтения DOCX:', error);
-        return 'Не удалось прочитать содержимое DOCX файла';
+        loadingElement.style.color = 'var(--discrepancy-color)';
     }
 }
 
@@ -248,15 +295,7 @@ function showUploadedFiles() {
         button.addEventListener('click', function() {
             const fileType = this.getAttribute('data-type');
             const file = fileType === 'tz' ? tzFile : docFile;
-
-            if (file.type === 'application/pdf') {
-                // PDF открываем в новом окне
-                const fileUrl = URL.createObjectURL(file);
-                window.open(fileUrl, '_blank');
-            } else {
-                // TXT и DOCX показываем в модальном окне
-                showFileContent(file, file.name);
-            }
+            showFileContent(file, file.name);
         });
     });
 }

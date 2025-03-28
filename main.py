@@ -1,13 +1,13 @@
 import os
 import time
 import logging
-import re  # Добавляем импорт для работы с регулярными выражениями
+import re
+from collections import Counter
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from collections import Counter
 from typing import Dict, List
 from config import settings
 from rag_pipeline import generate_analysis, explain_point, generate_detailed_explanation
@@ -299,7 +299,10 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
         logger.info(f"Начало обработки сессии {session_id}")
         tz_content = await read_file_content(tz_file_id, db)
         doc_content = await read_file_content(doc_file_id, db)
+
+        # Получаем расширенный анализ
         analysis_result = generate_analysis(tz_content, doc_content)
+        extended_analysis = generate_extended_analysis(analysis_result, doc_content['raw_text'])
 
         query = select(ComparisonSession).where(ComparisonSession.session_id == session_id)
         result = await db.execute(query)
@@ -312,6 +315,7 @@ async def process_documents_task(session_id: str, tz_file_id: int, doc_file_id: 
             session.completed_at = end_time
             session.processing_time = processing_time
             session.result = analysis_result
+            session.extended_analysis = extended_analysis  # Сохраняем расширенную аналитику
             await db.commit()
 
         logger.info(f"Анализ документов завершен: {session_id}")
@@ -338,6 +342,9 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
 
         if session.status == "completed" and session.result:
             report = []
+            extended_report = []
+
+            # Базовый отчет
             for idx, res in enumerate(session.result, 1):
                 report.append({
                     "№": idx,
@@ -346,8 +353,19 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
                     "Критичность": res["status"]["criticality"],
                     "Анализ": res["analysis"]
                 })
+
+            # Расширенная аналитика
+            if session.extended_analysis:
+                for item in session.extended_analysis.get("requirements", []):
+                    extended_report.append({
+                        "Требование": item["requirement"],
+                        "Соответствие": f"{item['match_percent']}%",
+                        "Детали": item["match_details"],
+                        "Статус": item["original_status"]["status"]
+                    })
         else:
             report = None
+            extended_report = None
 
         return {
             "status": session.status,
@@ -355,12 +373,15 @@ async def get_status(session_id: str, db: AsyncSession = Depends(get_db)):
             "completed_at": session.completed_at,
             "processing_time": session.processing_time,
             "report": report,
+            "extended_report": extended_report,  # Добавляем расширенную аналитику
+            "total_compliance": session.extended_analysis.get("total_compliance",
+                                                              0) if session.extended_analysis else 0,
+            "conclusion": session.extended_analysis.get("conclusion", "") if session.extended_analysis else "",
             "error_message": session.error_message
         }
     except Exception as e:
         logger.error(f"Ошибка при получении статуса: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/explain")
 async def explain_requirement(request: Dict[str, str], db: AsyncSession = Depends(get_db)):
@@ -435,14 +456,12 @@ async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(g
 
         if exact_matches:
             context = get_match_context(full_text, exact_matches[0])
-            cleaned_context = clean_text(context)
-            sentences = split_into_sentences(cleaned_context)
             return {
                 "status": "success",
                 "found": True,
                 "match_type": "exact",
                 "results": [{
-                    "content": sentences,  # Возвращаем список предложений
+                    "content": context,
                     "positions": [[m.start(), m.end()] for m in exact_matches]
                 }]
             }
@@ -454,9 +473,7 @@ async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(g
 
             for sentence in re.split(r'(?<=[.!?])\s+', full_text):
                 if any(keyword in sentence for keyword in keywords):
-                    cleaned_sentence = clean_text(sentence[:500])
-                    if cleaned_sentence:
-                        found_sentences.append(cleaned_sentence)
+                    found_sentences.append(sentence[:500])  # Ограничиваем длину
 
             if found_sentences:
                 return {
@@ -464,7 +481,7 @@ async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(g
                     "found": True,
                     "match_type": "keywords",
                     "results": [{
-                        "content": found_sentences,  # Возвращаем список предложений
+                        "content": " [...] ".join(found_sentences[:3]),
                         "message": "Найдено по ключевым словам из анализа"
                     }]
                 }
@@ -486,19 +503,6 @@ def get_match_context(text: str, match: re.Match, window: int = 100) -> str:
     start = max(0, match.start() - window)
     end = min(len(text), match.end() + window)
     return text[start:end]
-
-def clean_text(text: str) -> str:
-    """Очищает текст от лишних символов и форматирует ссылки"""
-    # Удаляем или заменяем ссылки вида [...].21 4
-    text = re.sub(r'\[\.\.\.\]\.\d+\s+\d+\.\d+', '', text)
-    # Удаляем лишние пробелы
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
-
-def split_into_sentences(text: str) -> List[str]:
-    """Разбивает текст на предложения"""
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-    return [s.strip() for s in sentences if s.strip()]
 
 
 def extract_keywords(text: str) -> List[str]:
@@ -724,6 +728,83 @@ async def get_stats():
         logger.error(f"Ошибка при получении статистики: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# Добавляем новую функцию для генерации расширенной аналитики
+def generate_extended_analysis(analysis_results: List[Dict], doc_text: str) -> Dict:
+    """Генерация расширенной аналитики с процентами соответствия"""
+    total_points = len(analysis_results)
+    matched_points = 0
+    detailed_results = []
+
+    for item in analysis_results:
+        requirement = item["requirement"]
+        status = item["status"]["status"]
+
+        # Анализ соответствия
+        match_percent = _calculate_match_percent(requirement, doc_text)
+
+        if status == "соответствует ТЗ":
+            matched_points += 1
+        elif match_percent > 50:  # Частичное соответствие
+            matched_points += 0.5
+
+        detailed_results.append({
+            "requirement": requirement,
+            "match_percent": match_percent,
+            "match_details": _get_match_details(requirement, doc_text),
+            "original_status": item["status"],
+            "original_analysis": item.get("analysis", "")
+        })
+
+    # Расчет общего соответствия
+    total_compliance = round((matched_points / total_points) * 100) if total_points else 0
+
+    return {
+        "requirements": detailed_results,
+        "total_compliance": total_compliance,
+        "conclusion": _generate_compliance_conclusion(total_compliance),
+        "analysis_date": datetime.now().isoformat()
+    }
+
+
+def _calculate_match_percent(requirement: str, doc_text: str) -> int:
+    """Вычисление процента соответствия"""
+    req_lower = requirement.lower()
+    doc_lower = doc_text.lower()
+
+    if req_lower in doc_lower:
+        return 100
+
+    req_words = set(req_lower.split())
+    doc_words = set(doc_lower.split())
+    common_words = req_words & doc_words
+
+    return round((len(common_words) / len(req_words)) * 100) if req_words else 0
+
+
+def _get_match_details(requirement: str, doc_text: str) -> str:
+    """Получение деталей соответствия"""
+    if requirement.lower() in doc_text.lower():
+        return "Полное текстовое соответствие"
+
+    sentences = re.split(r'(?<=[.!?])\s+', doc_text)
+    for sent in sentences:
+        if any(word in sent.lower() for word in requirement.lower().split()[:3]):
+            return f"Частичное совпадение: {sent[:150]}..."
+
+    return "Требование не найдено"
+
+
+def _generate_compliance_conclusion(percent: int) -> str:
+    """Генерация заключения"""
+    if percent >= 90:
+        return "Отличное соответствие требованиям"
+    elif percent >= 70:
+        return "Хорошее соответствие с незначительными отклонениями"
+    elif percent >= 50:
+        return "Удовлетворительное соответствие с замечаниями"
+    else:
+        return "Критическое несоответствие требованиям"
 
 @app.delete("/files/{file_id}")
 async def delete_file(file_id: int, db: AsyncSession = Depends(get_db)):

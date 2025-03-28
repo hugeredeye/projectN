@@ -58,6 +58,7 @@ class ComparisonSession(Base):
     error_message = Column(Text, nullable=True)
     processing_time = Column(Integer, nullable=True)
     is_deleted = Column(Boolean, default=False)
+    extended_analysis = Column(JSON, nullable=True)
 
     tz_file = relationship("UploadedFile", foreign_keys=[tz_file_id], back_populates="comparison_sessions_tz")
     doc_file = relationship("UploadedFile", foreign_keys=[doc_file_id], back_populates="comparison_sessions_doc")

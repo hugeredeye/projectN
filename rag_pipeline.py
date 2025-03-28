@@ -157,7 +157,7 @@ class RAGPipeline:
         """Разбивает текст на чанки с метаданными."""
         cleaned_text = self.clean_text(text)
         chunks = self.text_splitter.split_text(cleaned_text)
-        return [{"content": chunk, "metadata": {"source": source, "chunk_id": i+1}} for i, chunk in enumerate(chunks)]
+        return [{"content": chunk, "metadata": {"source": source, "chunk_id": i + 1}} for i, chunk in enumerate(chunks)]
 
     def process_documents(self, tz_content: Dict, doc_content: Dict) -> Tuple[FAISS, FAISS]:
         """Обработка документов и создание векторного хранилища с FAISS."""
@@ -165,12 +165,12 @@ class RAGPipeline:
             logger.info("Начало обработки документов...")
             if not isinstance(tz_content, dict) or not isinstance(doc_content, dict):
                 raise ValueError("Неправильный формат данных: ожидается словарь")
-            
+
             tz_chunks = self.split_into_chunks(tz_content['raw_text'], "tz")
             doc_chunks = self.split_into_chunks(doc_content['raw_text'], "doc")
-            
+
             logger.info(f"Создано чанков: ТЗ - {len(tz_chunks)}, Документация - {len(doc_chunks)}")
-            
+
             tz_faiss_path = os.path.join(settings.VECTOR_DB_PATH, "tz_faiss")
             doc_faiss_path = os.path.join(settings.VECTOR_DB_PATH, "doc_faiss")
 
@@ -196,7 +196,7 @@ class RAGPipeline:
             )
             doc_vectorstore.save_local(doc_faiss_path)
             logger.info("Создан и сохранён FAISS индекс для документации")
-            
+
             return tz_vectorstore, doc_vectorstore
         except Exception as e:
             logger.error(f"Ошибка при обработке документов: {str(e)}")
@@ -207,26 +207,28 @@ class RAGPipeline:
         try:
             logger.info("Извлечение требований из ТЗ...")
             tz_text = tz_content["raw_text"][:10000]
-            
+
             requirements = self.llm.invoke(tz_extraction_prompt.format(text=tz_text)).content
             logger.info(f"Извлечённые требования с помощью LLM:\n{requirements}")
-            
+
             cleaned_requirements = []
             for line in requirements.split("\n"):
                 line = line.strip()
                 if line.startswith("- ") and len(line[2:].strip()) > 10:
                     cleaned_requirements.append(line[2:].strip())
-            
+
             return "\n".join(f"- {req}" for req in cleaned_requirements)
         except Exception as e:
             if "429" in str(e) or "413" in str(e):  # Обработка 429 и 413
-                logger.warning(f"Ошибка {str(e).split()[2] if len(str(e).split()) > 2 else 'неизвестно'}, переключение ключа...")
+                logger.warning(
+                    f"Ошибка {str(e).split()[2] if len(str(e).split()) > 2 else 'неизвестно'}, переключение ключа...")
                 self.switch_api_key()
                 time.sleep(2)  # Задержка для соблюдения лимитов
                 return self.extract_tz_requirements(tz_content)  # Повторная попытка
             logger.error(f"Ошибка при извлечении требований из ТЗ: {str(e)}")
             tz_chunks = self.split_into_chunks(tz_text, "tz")
-            fallback_result = "\n".join(f"- {chunk['content']}" for chunk in tz_chunks if "должен" in chunk['content'].lower())
+            fallback_result = "\n".join(
+                f"- {chunk['content']}" for chunk in tz_chunks if "должен" in chunk['content'].lower())
             logger.info(f"Использован fallback в extract_tz_requirements:\n{fallback_result}")
             return fallback_result
 
@@ -236,7 +238,7 @@ class RAGPipeline:
             requirements = self.extract_tz_requirements(tz_content)
             doc_docs = doc_vectorstore.similarity_search("", k=10)
             doc_text = "\n".join(doc.page_content for doc in doc_docs)[:10000]
-            
+
             comparison_result = self.llm.invoke(comparison_prompt.format(
                 requirements=requirements,
                 doc_content=doc_text
@@ -271,7 +273,7 @@ class RAGPipeline:
                     if reason.startswith("[") and reason.endswith("]"):
                         reason = reason[1:-1]
                     current_requirement["analysis"] = reason
-            
+
             if current_requirement:
                 analysis_results.append(current_requirement)
 
@@ -280,7 +282,8 @@ class RAGPipeline:
             return analysis_results
         except Exception as e:
             if "429" in str(e) or "413" in str(e):  # Обработка 429 и 413
-                logger.warning(f"Ошибка {str(e).split()[2] if len(str(e).split()) > 2 else 'неизвестно'}, переключение ключа...")
+                logger.warning(
+                    f"Ошибка {str(e).split()[2] if len(str(e).split()) > 2 else 'неизвестно'}, переключение ключа...")
                 self.switch_api_key()
                 time.sleep(2)  # Задержка для соблюдения лимитов
                 return self.analyze_documents(tz_vectorstore, doc_vectorstore, tz_content)  # Повторная попытка
@@ -301,8 +304,127 @@ class RAGPipeline:
             logger.info("Использован fallback в analyze_documents")
             return fallback_result
 
+    def analyze_documents_with_metrics(self, tz_vectorstore: FAISS, doc_vectorstore: FAISS, tz_content: Dict) -> Dict:
+        """
+            Расширенный анализ документов с метриками соответствия
+            Возвращает:
+            {
+                "original_analysis": List[Dict],  # Оригинальные результаты
+                "metrics_analysis": Dict  # Новая аналитика с процентами
+            }
+            """
+        try:
+            # Получаем оригинальный анализ (без изменений)
+            original_results = self.analyze_documents(tz_vectorstore, doc_vectorstore, tz_content)
+
+            # Генерируем расширенную аналитику
+            metrics = self._calculate_compliance_metrics(original_results, doc_vectorstore)
+
+            return {
+                "original_analysis": original_results,
+                "metrics_analysis": metrics
+            }
+        except Exception as e:
+            logger.error(f"Ошибка расширенного анализа: {str(e)}")
+            return {
+                "original_analysis": [],
+                "metrics_analysis": {
+                    "total_compliance": 0,
+                    "requirements": [],
+                    "conclusion": "Ошибка анализа"
+                }
+            }
+
+    def _calculate_compliance_metrics(self, analysis_results: List[Dict], doc_vectorstore: FAISS) -> Dict:
+        """Вычисление метрик соответствия"""
+        total_requirements = len(analysis_results)
+        matched_requirements = 0
+        detailed_results = []
+
+        for item in analysis_results:
+            requirement = item["requirement"]
+            status = item["status"]["status"]
+
+            # Анализируем соответствие
+            match_info = self._analyze_requirement_match(requirement, doc_vectorstore)
+
+            # Считаем статистику
+            if status == "соответствует ТЗ":
+                matched_requirements += 1
+            elif match_info["match_percent"] > 50:
+                matched_requirements += 0.5
+
+            detailed_results.append({
+                "requirement": requirement,
+                "match_percent": match_info["match_percent"],
+                "match_details": match_info["details"],
+                "original_status": item["status"],
+                "original_analysis": item.get("analysis", "")
+            })
+
+        # Общий процент соответствия
+        total_compliance = round((matched_requirements / total_requirements) * 100) if total_requirements else 0
+
+        return {
+            "total_compliance": total_compliance,
+            "requirements": detailed_results,
+            "conclusion": self._generate_compliance_conclusion(total_compliance),
+            "analysis_date": datetime.now().isoformat()
+        }
+
+    def _analyze_requirement_match(self, requirement: str, doc_vectorstore: FAISS) -> Dict:
+        """Анализ соответствия конкретного требования"""
+        try:
+            # Поиск релевантных фрагментов
+            docs = doc_vectorstore.similarity_search(requirement, k=3)
+            doc_text = "\n".join(doc.page_content for doc in docs)
+
+            # Проверка точного соответствия
+            if requirement.lower() in doc_text.lower():
+                return {
+                    "match_percent": 100,
+                    "details": "Полное текстовое соответствие"
+                }
+
+            # Проверка по ключевым словам
+            req_words = set(requirement.lower().split())
+            doc_words = set(doc_text.lower().split())
+            common_words = req_words & doc_words
+
+            if not common_words:
+                return {
+                    "match_percent": 0,
+                    "details": "Требование не найдено"
+                }
+
+            match_percent = round((len(common_words) / len(req_words)) * 100)
+            return {
+                "match_percent": match_percent,
+                "details": f"Частичное совпадение по {len(common_words)} ключевым словам"
+            }
+
+        except Exception as e:
+            logger.error(f"Ошибка анализа требования: {str(e)}")
+            return {
+                "match_percent": 0,
+                "details": "Ошибка анализа"
+            }
+
+    def _generate_compliance_conclusion(self, percent: int) -> str:
+        """Генерация текстового заключения"""
+        if percent >= 90:
+            return "Отличное соответствие требованиям"
+        elif percent >= 70:
+            return "Хорошее соответствие с незначительными отклонениями"
+        elif percent >= 50:
+            return "Удовлетворительное соответствие с замечаниями"
+        else:
+            return "Критическое несоответствие требованиям"
+
+
 # Глобальные функции
 rag_pipeline = RAGPipeline()
+
 
 def generate_analysis(tz_content: Dict, doc_content: Dict) -> List[Dict]:
     try:
@@ -378,7 +500,6 @@ def generate_detailed_explanation(
     tz_chunk = find_most_relevant_chunk(requirement, tz_content['raw_text'])
     doc_chunk = find_most_relevant_chunk(requirement, doc_content['raw_text'])
 
-
     # Генерация ответа
     response = rag_pipeline.llm.invoke(detailed_explanation_prompt.format(
         requirement=requirement,
@@ -418,7 +539,8 @@ def explain_point(point: str) -> str:
 
     except Exception as e:
         if "429" in str(e) or "413" in str(e):  # Обработка 429 и 413
-            logger.warning(f"Ошибка {str(e).split()[2] if len(str(e).split()) > 2 else 'неизвестно'} в explain_point, переключение ключа...")
+            logger.warning(
+                f"Ошибка {str(e).split()[2] if len(str(e).split()) > 2 else 'неизвестно'} в explain_point, переключение ключа...")
             rag_pipeline.switch_api_key()
             time.sleep(2)  # Задержка для соблюдения лимитов
             return explain_point(point)  # Повторная попытка

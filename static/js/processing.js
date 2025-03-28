@@ -43,75 +43,71 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-function normalizeAlignment() {
-    const errorItems = document.querySelectorAll('.error-item');
-    errorItems.forEach(item => {
-        // Устанавливаем text-align: left для самого .error-item
-        item.style.textAlign = 'left';
+    async function checkStatus() {
+        try {
+            const response = await fetch(`/status/${sessionId}`);
+            const data = await response.json();
 
-        // Устанавливаем text-align: left для всех дочерних элементов
-        const statusElements = item.querySelectorAll('.status');
-        statusElements.forEach(status => {
-            status.style.textAlign = 'left';
-        });
+            // Получаем элементы
+            const responseContent = document.querySelector('.response-content');
+            const resultCard = document.querySelector('.result-card');
+            const resultCardHeader = resultCard.querySelector('h1');
+            const complianceInfo = document.querySelector('.compliance-info');
 
-        const paragraphs = item.querySelectorAll('p');
-        paragraphs.forEach(p => {
-            p.style.textAlign = 'left';
-        });
-    });
-}
+            switch (data.status) {
+                case 'processing':
+                    progressText.textContent = `Обработка...`;
+                    responseContent.textContent = 'Ваш отчет в процессе обработки.';
+                    resultCardHeader.textContent = 'Идет составление отчета';
+                    downloadButton.style.display = 'none';
+                    viewErrorsButton.style.display = 'none';
+                    if (complianceInfo) complianceInfo.style.display = 'none';
+                    setTimeout(checkStatus, 1000);
+                    break;
 
-async function checkStatus() {
-    try {
-        const response = await fetch(`/status/${sessionId}`);
-        const data = await response.json();
+                case 'completed':
+                    resultCardHeader.textContent = 'Составление отчета завершено!';
+                    progressText.textContent = 'Обработка завершена!';
+                    responseContent.textContent = 'Ваш отчет готов к просмотру!';
+                    downloadButton.style.display = 'block';
+                    viewErrorsButton.style.display = 'flex';
+                    downloadButton.disabled = false;
+                    viewErrorsButton.disabled = false;
 
-        // Получаем элементы
-        const responseContent = document.querySelector('.response-content');
-        const resultCard = document.querySelector('.result-card');
-        const resultCardHeader = resultCard.querySelector('h1'); // Находим <h1> внутри .result-card
+                    // Добавляем информацию о соответствии
+                    if (complianceInfo) {
+                        complianceInfo.style.display = 'block';
+                        complianceInfo.innerHTML = `
+                            <div class="compliance-meter">
+                                <div class="meter-bar" style="width: ${data.total_compliance}%"></div>
+                                <span class="meter-text">${data.total_compliance}% соответствия</span>
+                            </div>
+                            <p class="conclusion">${data.conclusion}</p>
+                        `;
+                    }
+                    break;
 
-        switch (data.status) {
-            case 'processing':
-                progressText.textContent = `Обработка...`;
-                responseContent.textContent = 'Ваш отчет в процессе обработки.';
-                resultCardHeader.textContent = 'Идет составление отчета'; // Обновляем текст в <h1>
-                downloadButton.style.display = 'none';
-                viewErrorsButton.style.display = 'none';
-                setTimeout(checkStatus, 1000);
-                break;
+                case 'error':
+                    resultCardHeader.textContent = 'Ошибка при составлении отчета';
+                    responseContent.textContent = 'Ошибка создания отчета';
+                    downloadButton.style.display = 'none';
+                    viewErrorsButton.style.display = 'none';
+                    if (complianceInfo) complianceInfo.style.display = 'none';
+                    break;
 
-            case 'completed':
-                resultCardHeader.textContent = 'Составление отчета завершено!'; // Обновляем текст в <h1>
-                progressText.textContent = 'Обработка завершена!';
-                responseContent.textContent = 'Ваш отчет готов к просмотру!';
-                downloadButton.style.display = 'block';
-                viewErrorsButton.style.display = 'flex';
-                downloadButton.disabled = false;
-                viewErrorsButton.disabled = false;
-                break;
-
-            case 'error':
-                resultCardHeader.textContent = 'Ошибка при составлении отчета'; // Обновляем текст в <h1>
-                responseContent.textContent = 'Ошибка создания отчета';
-                downloadButton.style.display = 'none';
-                viewErrorsButton.style.display = 'none';
-                break;
-
-            default:
-                progressText.textContent = 'Неизвестный статус обработки';
-                resultCardHeader.textContent = 'Неизвестный статус'; // Обновляем текст в <h1>
-                break;
+                default:
+                    progressText.textContent = 'Неизвестный статус обработки';
+                    resultCardHeader.textContent = 'Неизвестный статус';
+                    break;
+            }
+        } catch (error) {
+            console.error('Ошибка при проверке статуса:', error);
+            const responseContent = document.querySelector('.response-content');
+            const resultCardHeader = document.querySelector('.result-card h1');
+            responseContent.textContent = 'Ошибка при проверке статуса обработки';
+            resultCardHeader.textContent = 'Ошибка при обработке';
         }
-    } catch (error) {
-        console.error('Ошибка при проверке статуса:', error);
-        const responseContent = document.querySelector('.response-content');
-        const resultCardHeader = document.querySelector('.result-card h1');
-        responseContent.textContent = 'Ошибка при проверке статуса обработки';
-        resultCardHeader.textContent = 'Ошибка при обработке'; // Обновляем текст в <h1> при ошибке
     }
-}
 
     downloadButton.addEventListener('click', async function() {
         try {
@@ -123,344 +119,336 @@ async function checkStatus() {
     });
 
     viewErrorsButton.addEventListener('click', async function() {
-    try {
-        const response = await fetch(`/errors/${sessionId}`);
-        if (!response.ok) throw new Error('Ошибка при получении отчета');
-        const data = await response.json();
+        try {
+            const response = await fetch(`/status/${sessionId}`);
+            if (!response.ok) throw new Error('Ошибка при получении отчета');
+            const data = await response.json();
 
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <!-- Существующий поиск (без изменений) -->
-                <div class="search-container">
-                    <h3>Интерактивный поиск</h3>
-                    <div class="search-input-container">
-                        <input type="text" class="search-input" placeholder="Например: Объяснить несоответствие">
-                        <button class="search-button">Найти</button>
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="search-container">
+                        <h3>Интерактивный поиск</h3>
+                        <div class="search-input-container">
+                            <input type="text" class="search-input" placeholder="Например: Объяснить несоответствие">
+                            <button class="search-button">Найти</button>
+                        </div>
+                    </div>
+
+                    <div class="modal-main-content">
+                        <div class="tabs">
+                            <button class="tab-button active" data-tab="basic">Базовый отчет</button>
+                            <button class="tab-button" data-tab="extended">Расширенный отчет</button>
+                        </div>
+
+                        <div class="tab-content active" data-tab="basic">
+                            <h2>Отчет об ошибках</h2>
+                            <div class="errors-list">
+                                ${data.report ? data.report.map(item => `
+                                    <div class="error-item"
+                                         data-content="${item.Требование.toLowerCase()} ${item.Статус.toLowerCase()} ${item.Критичность.toLowerCase()} ${item.Анализ.toLowerCase()}"
+                                         data-status="${item.Статус === 'соответствует ТЗ' ? 'success' : 'error'}">
+                                        <div class="error-header">
+                                            <div class="error-main-info">
+                                                <h3>${item.Требование}</h3>
+                                                <p class="status ${item.Статус === 'соответствует ТЗ' ? 'success' : 'error'}">
+                                                    Статус: ${item.Статус}
+                                                </p>
+                                            </div>
+                                            <button class="toggle-details">Подробнее ▼</button>
+                                        </div>
+                                        <div class="error-details" style="display:none">
+                                            <p><strong>Критичность:</strong> ${item.Критичность}</p>
+                                            <p><strong>Анализ:</strong> ${item.Анализ}</p>
+                                            <div class="action-buttons">
+                                                <button class="explain-button" data-requirement="${item.Требование}">
+                                                    Пояснить
+                                                </button>
+                                                <button class="show-in-doc-button" data-requirement="${item.Требование}">
+                                                    Показать в документации
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('') : '<p>Нет данных для отображения</p>'}
+                            </div>
+                        </div>
+
+                        <div class="tab-content" data-tab="extended">
+                            <h2>Расширенный отчет</h2>
+                            ${data.extended_report ? `
+                                <div class="compliance-summary">
+                                    <h3>Общее соответствие: ${data.total_compliance}%</h3>
+                                    <p>${data.conclusion}</p>
+                                </div>
+                                <div class="extended-list">
+                                    ${data.extended_report.map(item => `
+                                        <div class="extended-item">
+                                            <h3>${item.Требование}</h3>
+                                            <div class="compliance-meter">
+                                                <div class="meter-bar" style="width: ${item.Соответствие.replace('%', '')}%"></div>
+                                                <span class="meter-text">${item.Соответствие}</span>
+                                            </div>
+                                            <p><strong>Статус:</strong> ${item.Статус}</p>
+                                            <p><strong>Детали:</strong> ${item.Детали}</p>
+                                            <button class="explain-button" data-requirement="${item.Требование}">
+                                                Детальный анализ
+                                            </button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : '<p>Нет данных для отображения</p>'}
+                        </div>
+                    </div>
+
+                    <button class="close-button">Закрыть</button>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Создаем отдельное модальное окно для документации
+            const docModal = document.createElement('div');
+            docModal.className = 'doc-modal';
+            docModal.style.display = 'none';
+            docModal.innerHTML = `
+                <div class="doc-modal-content">
+                    <div class="doc-modal-header">
+                        <h3>Найдено в документации</h3>
+                        <button class="close-doc-modal">×</button>
+                    </div>
+                    <div class="doc-modal-body">
+                        <div class="doc-context"></div>
                     </div>
                 </div>
+            `;
+            document.body.appendChild(docModal);
 
-                <h2>Отчет об ошибках</h2>
-                <div class="errors-list">
-                    ${data.errors.map(error => `
-                        <!-- Обертка для карточки (сохраняем все data-атрибуты) -->
-                        <div class="error-item"
-                             data-content="${error.requirement.toLowerCase()} ${error.status.toLowerCase()} ${error.criticality.toLowerCase()} ${error.analysis.toLowerCase()}"
-                             data-section="${error.section || 'Общие требования'}"
-                             data-status="${error.status === 'соответствует ТЗ' ? 'success' : 'error'}">
+            // Добавляем обработчики для переключения вкладок
+            const tabButtons = modal.querySelectorAll('.tab-button');
+            const tabContents = modal.querySelectorAll('.tab-content');
 
-                            <!-- Верхняя часть карточки (теперь с кнопкой) -->
-                            <div class="error-header">
-                                <div class="error-main-info">
-                                    <h3>${error.requirement}</h3>
-                                    <p class="status ${error.status === 'соответствует ТЗ' ? 'success' : 'error'}">
-                                        Статус: ${error.status}
-                                    </p>
-                                </div>
-                                <button class="toggle-details">Подробнее ▼</button>
-                            </div>
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // Убираем активный класс у всех кнопок и контента
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    tabContents.forEach(content => content.classList.remove('active'));
 
-                            <!-- Скрытая часть (появляется при клике) -->
-                            <div class="error-details" style="display:none">
-                                <p><strong>Критичность:</strong> ${error.criticality}</p>
-                                <p><strong>Анализ:</strong> ${error.analysis}</p>
-                                <div class="action-buttons">
-                                    <button class="explain-button button" data-requirement="${error.requirement}">
-                                        Пояснить
-                                    </button>
-                                    <button class="show-in-doc-button button" data-requirement="${error.requirement}">
-                                        Показать в документации
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-                <button class="close-button">Закрыть</button>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-
-        // Боковая панель с пояснениями (существующий код)
-        const explanationPanel = document.createElement('div');
-        explanationPanel.className = 'explanation-panel';
-        explanationPanel.innerHTML = `
-            <button class="close-panel">×</button>
-            <h3>Пояснение</h3>
-            <div class="explanation-content">
-                <div class="explanation-text"></div>
-                <div class="reference-links"></div>
-            </div>
-        `;
-        document.body.appendChild(explanationPanel);
-
-        // 1. Обработчик кнопки "Подробнее" (НОВОЕ)
-        modal.querySelectorAll('.toggle-details').forEach(button => {
-            button.addEventListener('click', function() {
-                const card = this.closest('.error-item');
-                const details = card.querySelector('.error-details');
-                const isHidden = details.style.display === 'none';
-
-                details.style.display = isHidden ? 'block' : 'none';
-                this.textContent = isHidden ? 'Свернуть ▲' : 'Подробнее ▼';
-
-                // Прокрутка для плавного отображения
-                if (isHidden) {
-                    setTimeout(() => {
-                        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }, 50);
-                }
-            });
-        });
-
-        // 2. Функция поиска (существующий код БЕЗ ИЗМЕНЕНИЙ)
-        const searchInput = modal.querySelector('.search-input');
-        const searchButton = modal.querySelector('.search-button');
-        const errorItems = modal.querySelectorAll('.error-item');
-
-        function performSearch() {
-            const searchTerm = searchInput.value.toLowerCase();
-
-            errorItems.forEach(item => {
-                item.classList.remove('highlight-section');
-                item.style.display = 'block';
+                    // Добавляем активный класс выбранной кнопке и соответствующему контенту
+                    button.classList.add('active');
+                    const tabName = button.getAttribute('data-tab');
+                    modal.querySelector(`.tab-content[data-tab="${tabName}"]`).classList.add('active');
+                });
             });
 
-            if (searchTerm.length < 3) {
-                alert('Введите минимум 3 символа для поиска');
-                return;
-            }
+            // Добавляем функциональность поиска
+            const searchInput = modal.querySelector('.search-input');
+            const searchButton = modal.querySelector('.search-button');
+            const errorItems = modal.querySelectorAll('.error-item');
+            const extendedItems = modal.querySelectorAll('.extended-item');
 
-            let foundItems = false;
-
-            if (searchTerm.includes('объяснить') || searchTerm.includes('показать')) {
-                const keywords = searchTerm
-                    .replace(/^(объяснить|показать)/, '')
-                    .trim()
-                    .split(' ')
-                    .filter(word => word.length > 2);
-
+            function performSearch() {
+                const searchTerm = searchInput.value.toLowerCase();
+                
+                // Сбрасываем подсветку и видимость
                 errorItems.forEach(item => {
-                    const content = item.getAttribute('data-content');
-                    const itemSection = item.getAttribute('data-section');
-
-                    const matches = keywords.some(keyword => {
-                        return content.includes(keyword) || itemSection.toLowerCase().includes(keyword);
-                    });
-
+                    item.classList.remove('highlight-section');
+                    item.style.display = 'block';
+                });
+                extendedItems.forEach(item => {
+                    item.classList.remove('highlight-section');
+                    item.style.display = 'block';
+                });
+                
+                if (searchTerm.length < 2) {
+                    alert('Введите минимум 2 символа для поиска');
+                    return;
+                }
+                
+                let foundItems = false;
+                
+                // Поиск по всем элементам
+                [...errorItems, ...extendedItems].forEach(item => {
+                    const content = item.getAttribute('data-content') || '';
+                    const requirement = item.querySelector('h3')?.textContent.toLowerCase() || '';
+                    const status = item.querySelector('.status')?.textContent.toLowerCase() || '';
+                    const details = item.querySelector('.error-details')?.textContent.toLowerCase() || '';
+                    
+                    // Проверяем совпадение по всем полям
+                    const matches = content.includes(searchTerm) || 
+                                  requirement.includes(searchTerm) || 
+                                  status.includes(searchTerm) || 
+                                  details.includes(searchTerm);
+                    
                     if (matches) {
                         foundItems = true;
                         item.classList.add('highlight-section');
-                        item.classList.add(item.getAttribute('data-status'));
-
-                        // Автоматически раскрываем найденные карточки
-                        item.querySelector('.error-details').style.display = 'block';
-                        item.querySelector('.toggle-details').textContent = 'Свернуть ▲';
+                        item.style.display = 'block';
+                        
+                        // Если это элемент с деталями, показываем их
+                        const detailsElement = item.querySelector('.error-details');
+                        if (detailsElement) {
+                            detailsElement.style.display = 'block';
+                        }
                     } else {
                         item.style.display = 'none';
                     }
                 });
-            } else {
-                errorItems.forEach(item => {
-                    const content = item.getAttribute('data-content');
-                    const itemSection = item.getAttribute('data-section');
-                    const matches = content.includes(searchTerm) || itemSection.toLowerCase().includes(searchTerm);
-
-                    if (matches) {
-                        foundItems = true;
-                        item.classList.add('highlight-section');
-                        item.classList.add(item.getAttribute('data-status'));
-                    } else {
-                        item.style.display = 'none';
-                    }
-                });
+                
+                if (!foundItems) {
+                    alert('По вашему запросу ничего не найдено');
+                }
             }
-
-            if (!foundItems) {
-                alert('По вашему запросу ничего не найдено');
-            }
-
-            normalizeAlignment();
-        }
-
-        // 3. Обработчики событий (существующий код)
-        searchButton.addEventListener('click', performSearch);
-        searchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') performSearch();
-        });
-
-        // 4. Обработчики закрытия (существующий код)
-        modal.querySelector('.close-button').addEventListener('click', () => {
-            modal.remove();
-            explanationPanel.remove();
-        });
-
-        explanationPanel.querySelector('.close-panel').addEventListener('click', () => {
-            explanationPanel.classList.remove('active');
-        });
-
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.remove();
-                explanationPanel.remove();
-            }
-        });
-
-        // 5. Обработчик пояснений
-        // Заменяем только обработчик кнопки "Пояснить"
-        modal.querySelectorAll('.explain-button').forEach(button => {
-            button.addEventListener('click', async function() {
-                const requirement = this.getAttribute('data-requirement');
-                const card = this.closest('.error-item');
-
-                // Добавляем индикатор загрузки
-                const loadingIndicator = document.createElement('div');
-                loadingIndicator.className = 'loading-explanation';
-                loadingIndicator.textContent = 'Анализируем...';
-                card.appendChild(loadingIndicator);
-
-                try {
-                    // В обработчике кнопки "Пояснить":
-                const cardAnalysis = this.closest('.error-item')
-                    .querySelector('p:last-child').textContent
-                    .replace('Анализ:', '').trim();
-
-                const response = await fetch('/detailed-explain', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        requirement: requirement,
-                        session_id: sessionId,
-                        card_analysis: cardAnalysis  // Добавляем анализ
-                    })
-                });
-
-                    const data = await response.json();
-
-                    // Создаем красивый вывод
-                    const explanationBox = document.createElement('div');
-                    explanationBox.className = 'detailed-explanation';
-                    explanationBox.innerHTML = `
-                        <h4>🔍 Детальный анализ:</h4>
-                        ${formatExplanation(data.explanation)}
-                        <button class="close-explanation">Скрыть</button>
-                    `;
-
-                    card.appendChild(explanationBox);
-
-                    // Обработчик закрытия
-                    explanationBox.querySelector('.close-explanation').addEventListener('click', () => {
-                        explanationBox.remove();
-                    });
-
-                } catch (error) {
-                    alert('Ошибка при анализе');
-                    console.error(error);
-                } finally {
-                    loadingIndicator.remove();
+            
+            // Обработчики событий для поиска
+            searchButton.addEventListener('click', performSearch);
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performSearch();
                 }
             });
-        });
 
-        // Форматирование текста от LLM
-        function formatExplanation(text) {
-            return text
-                .replace(/- Несоответствие:/g, '<strong>🚨 Несоответствие:</strong>')
-                .replace(/- Причина:/g, '<strong>📌 Причина:</strong>')
-                .replace(/- Рекомендация:/g, '<strong>💡 Рекомендация:</strong>')
-                .replace(/- Критичность:/g, '<strong>⚠️ Критичность:</strong>')
-                .replace(/\n/g, '<br>');
-        }
+            // Остальные обработчики (аналогично предыдущей версии)
+            modal.querySelectorAll('.toggle-details').forEach(button => {
+                button.addEventListener('click', function() {
+                    const card = this.closest('.error-item');
+                    const details = card.querySelector('.error-details');
+                    const isHidden = details.style.display === 'none';
 
-        // 6.Обработчик кнопки "Показать в документации"
-        document.querySelectorAll('.show-in-doc-button').forEach(button => {
-            button.addEventListener('click', async function() {
-                const requirement = this.getAttribute('data-requirement');
-                const card = this.closest('.error-item');
-        
-                // Удаляем предыдущий результат поиска, если он есть
-                const existingDocContent = card.querySelector('.doc-search-content');
-                if (existingDocContent) {
-                    existingDocContent.remove();
-                }
-        
-                const loader = document.createElement('div');
-                loader.className = 'doc-search-loading';
-                loader.textContent = 'Ищем в документации...';
-                card.appendChild(loader);
-        
-                try {
-                    const response = await fetch('/find-in-document', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            requirement: requirement,
-                            session_id: sessionId
-                        })
-                    });
-                    const data = await response.json();
-        
-                    if (!data.found) {
-                        const docContentDiv = document.createElement('div');
-                        docContentDiv.className = 'doc-search-content';
-                        docContentDiv.innerHTML = `
-                            <h4>Найдено в документации:</h4>
-                            <p>${data.message || 'Текст не найден в документации'}</p>
+                    details.style.display = isHidden ? 'block' : 'none';
+                    this.textContent = isHidden ? 'Свернуть ▲' : 'Подробнее ▼';
+
+                    if (isHidden) {
+                        setTimeout(() => {
+                            card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }, 50);
+                    }
+                });
+            });
+
+            // Обработчик кнопки "Пояснить" для обоих вкладок
+            modal.querySelectorAll('.explain-button').forEach(button => {
+                button.addEventListener('click', async function() {
+                    const requirement = this.getAttribute('data-requirement');
+                    const card = this.closest('.error-item') || this.closest('.extended-item');
+
+                    const loadingIndicator = document.createElement('div');
+                    loadingIndicator.className = 'loading-explanation';
+                    loadingIndicator.textContent = 'Анализируем...';
+                    card.appendChild(loadingIndicator);
+
+                    try {
+                        const response = await fetch('/detailed-explain', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                requirement: requirement,
+                                session_id: sessionId
+                            })
+                        });
+                        const data = await response.json();
+
+                        const explanationBox = document.createElement('div');
+                        explanationBox.className = 'detailed-explanation';
+                        explanationBox.innerHTML = `
+                            <h4>🔍 Детальный анализ:</h4>
+                            ${formatExplanation(data.explanation)}
+                            <button class="close-explanation">Скрыть</button>
                         `;
-                        card.appendChild(docContentDiv);
-                        return;
+
+                        card.appendChild(explanationBox);
+
+                        explanationBox.querySelector('.close-explanation').addEventListener('click', () => {
+                            explanationBox.remove();
+                        });
+
+                    } catch (error) {
+                        alert('Ошибка при анализе');
+                        console.error(error);
+                    } finally {
+                        loadingIndicator.remove();
                     }
-        
-                    const docContentDiv = document.createElement('div');
-                    docContentDiv.className = 'doc-search-content';
-                    docContentDiv.innerHTML = `
-                        <h4>Найдено в документации:</h4>
-                        <div class="doc-context">
-                            <ul class="doc-sentences">
-                                ${data.results[0].content.map(sentence => `
-                                    <li>${highlightMatches(sentence, data.results[0].positions)}</li>
-                                `).join('')}
-                            </ul>
-                            ${data.results[0].message ? `<p class="search-message">${data.results[0].message}</p>` : ''}
-                        </div>
-                    `;
-                    card.appendChild(docContentDiv);
-                } catch (error) {
-                    alert('Ошибка поиска');
-                    console.error(error);
-                } finally {
-                    loader.remove();
+                });
+            });
+
+            // Обработчик кнопки "Показать в документации"
+            modal.querySelectorAll('.show-in-doc-button').forEach(button => {
+                button.addEventListener('click', async function() {
+                    const requirement = this.getAttribute('data-requirement');
+                    const docContext = docModal.querySelector('.doc-context');
+
+                    const loader = document.createElement('div');
+                    loader.className = 'doc-search-loading';
+                    loader.textContent = 'Ищем в документации...';
+                    docContext.appendChild(loader);
+
+                    try {
+                        const response = await fetch('/find-in-document', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                requirement: requirement,
+                                session_id: sessionId
+                            })
+                        });
+                        const data = await response.json();
+
+                        if (!data.found) {
+                            alert('Текст не найден в документации');
+                            return;
+                        }
+
+                        docContext.innerHTML = data.results[0].content;
+                        docModal.style.display = 'flex';
+
+                        // Добавляем обработчик для кнопки закрытия
+                        docModal.querySelector('.close-doc-modal').addEventListener('click', () => {
+                            docModal.style.display = 'none';
+                        });
+
+                        // Закрытие по клику вне окна
+                        docModal.addEventListener('click', (e) => {
+                            if (e.target === docModal) {
+                                docModal.style.display = 'none';
+                            }
+                        });
+
+                    } catch (error) {
+                        alert('Ошибка поиска');
+                        console.error(error);
+                    } finally {
+                        loader.remove();
+                    }
+                });
+            });
+
+            // Обработчики закрытия
+            modal.querySelector('.close-button').addEventListener('click', () => {
+                modal.remove();
+            });
+
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
                 }
             });
-        });
 
+            // Функция форматирования пояснений
+            function formatExplanation(text) {
+                return text
+                    .replace(/- Несоответствие:/g, '<strong>🚨 Несоответствие:</strong>')
+                    .replace(/- Причина:/g, '<strong>📌 Причина:</strong>')
+                    .replace(/- Рекомендация:/g, '<strong>💡 Рекомендация:</strong>')
+                    .replace(/- Критичность:/g, '<strong>⚠️ Критичность:</strong>')
+                    .replace(/\n/g, '<br>');
+            }
 
-        // Функция подсветки совпадений
-        
-        // Функция подсветки совпадений
-        function highlightMatches(text, matches) {
-            if (!matches || matches.length === 0) return text;
-        
-            let result = '';
-            let lastPos = 0;
-        
-            matches.forEach(([start, end]) => {
-                result += text.slice(lastPos, start);
-                result += `<span class="text-match">${text.slice(start, end)}</span>`;
-                lastPos = end;
-            });
-        
-            result += text.slice(lastPos);
-            return result;
+        } catch (error) {
+            alert('Ошибка при получении отчета об ошибках');
+            console.error('Ошибка:', error);
         }
-
-    } catch (error) {
-        alert('Ошибка при получении отчета об ошибках');
-        console.error('Ошибка:', error);
-    }
-});
+    });
 
     checkStatus();
 

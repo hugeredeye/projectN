@@ -17,11 +17,6 @@ RUN echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries \
         python3-dev \
         libpq-dev \
         postgresql-client \
-        openvpn \
-        iptables \
-        net-tools \
-        iproute2 \
-        curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Копируем файлы зависимостей
@@ -36,28 +31,12 @@ COPY . .
 # Создаем необходимые директории
 RUN mkdir -p uploads logs vector_db
 
-# Копируем конфигурационный файл VPN и даем разрешения
-COPY turk5_247479803.ovpn /etc/openvpn/
-RUN chmod 600 /etc/openvpn/turk5_247479803.ovpn
-
-# Копируем скрипт для настройки DNS и даем разрешения
-COPY vpn-up.sh /etc/openvpn/vpn-up.sh
-RUN chmod +x /etc/openvpn/vpn-up.sh
-
-# Создаем файл для логов OpenVPN
-RUN touch /var/log/openvpn.log && chmod 666 /var/log/openvpn.log
-
-# Копируем скрипт запуска и даем ему права на выполнение
-COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
-
 # Устанавливаем переменные окружения
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV GROQ_API_KEY=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
 
 # Открываем порт
 EXPOSE 8000
 
 # Запускаем приложение
-CMD ["/app/start.sh"] 
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 
