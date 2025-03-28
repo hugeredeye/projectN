@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+import re  # Добавляем импорт для работы с регулярными выражениями
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, StreamingResponse
@@ -384,6 +385,8 @@ async def explain_requirement(request: Dict[str, str], db: AsyncSession = Depend
 @app.post("/find-in-document")
 async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(get_db)):
     """Поиск требования в документации с использованием FAISS"""
+    from langchain_huggingface import HuggingFaceEmbeddings
+    from langchain_community.vectorstores import FAISS
     try:
         requirement = request.get("requirement")
         session_id = request.get("session_id")
@@ -401,45 +404,102 @@ async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(g
         if not session:
             raise HTTPException(status_code=404, detail="Сессия не найдена")
 
-        # Получаем файл документации
-        doc_file = await db.get(UploadedFile, session.doc_file_id)
-        if not doc_file:
-            raise HTTPException(status_code=404, detail="Файл документации не найден")
-
-        # Загружаем векторное хранилище для документации
+        # Проверяем существование векторного хранилища
         doc_faiss_path = os.path.join(settings.VECTOR_DB_PATH, "doc_faiss")
         if not os.path.exists(doc_faiss_path):
-            raise HTTPException(status_code=404, detail="Векторное хранилище не найдено")
+            logger.error(f"Векторное хранилище не найдено по пути: {doc_faiss_path}")
+            raise HTTPException(
+                status_code=404,
+                detail="Векторное хранилище документации не найдено. Пожалуйста, выполните сравнение документов сначала."
+            )
 
+        # Проверяем наличие необходимых файлов FAISS
+        required_files = ["index.faiss", "index.pkl"]
+        for file in required_files:
+            if not os.path.exists(os.path.join(doc_faiss_path, file)):
+                logger.error(f"Файл {file} отсутствует в {doc_faiss_path}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Файл {file} векторного хранилища не найден"
+                )
+
+        # Загружаем эмбеддинги и векторное хранилище
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        doc_vectorstore = FAISS.load_local(doc_faiss_path, embeddings)
 
-        # Ищем наиболее релевантные фрагменты
-        docs = doc_vectorstore.similarity_search(requirement, k=3)
+        try:
+            doc_vectorstore = FAISS.load_local(doc_faiss_path, embeddings, allow_dangerous_deserialization=True)
+        except Exception as e:
+            logger.error(f"Ошибка загрузки векторного хранилища: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail="Не удалось загрузить векторное хранилище документации"
+            )
 
-        if not docs:
-            return {"status": "success", "found": False, "message": "Требование не найдено в документации"}
+        # Ищем наиболее релевантные фрагменты с ограничением длины
+        try:
+            docs = doc_vectorstore.similarity_search(requirement, k=3)
 
-        # Формируем результаты
-        results = []
-        for doc in docs:
-            results.append({
-                "content": doc.page_content,
-                "source": doc.metadata.get("source", "unknown"),
-                "chunk_id": doc.metadata.get("chunk_id", 0)
-            })
+            if not docs:
+                return {
+                    "status": "success",
+                    "found": False,
+                    "message": "Требование не найдено в документации"
+                }
 
-        return {
-            "status": "success",
-            "found": True,
-            "results": results,
-            "matches": [(m.start(), m.end()) for m in
-                        re.finditer(re.escape(requirement), results[0]["content"], re.IGNORECASE)]
-        }
+            # Ограничиваем длину возвращаемого текста
+            MAX_LENGTH = 2000
+            processed_results = []
+            for doc in docs:
+                content = doc.page_content
+                if len(content) > MAX_LENGTH:
+                    # Находим позицию требования в тексте
+                    match = re.search(re.escape(requirement), content, re.IGNORECASE)
+                    start_pos = match.start() if match else 0
+                    # Берем фрагмент вокруг требования
+                    start = max(0, start_pos - MAX_LENGTH // 2)
+                    end = min(len(content), start_pos + len(requirement) + MAX_LENGTH // 2)
+                    content = content[start:end]
+                    if start > 0:
+                        content = "..." + content
+                    if end < len(doc.page_content):
+                        content = content + "..."
 
+                processed_results.append({
+                    "content": content,
+                    "source": doc.metadata.get("source", "unknown"),
+                    "chunk_id": doc.metadata.get("chunk_id", 0),
+                    "full_length": len(doc.page_content)
+                })
+
+            # Находим точные совпадения для подсветки
+            first_result_content = processed_results[0]["content"]
+            matches = []
+            for m in re.finditer(re.escape(requirement), first_result_content, re.IGNORECASE):
+                matches.append([m.start(), m.end()])
+
+            return {
+                "status": "success",
+                "found": True,
+                "results": processed_results,
+                "matches": matches,
+                "vector_db_path": doc_faiss_path  # для отладки
+            }
+
+        except Exception as e:
+            logger.error(f"Ошибка поиска в векторной БД: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail="Ошибка при поиске в документации"
+            )
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Ошибка поиска в документации: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Неожиданная ошибка поиска в документации: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Внутренняя ошибка сервера при поиске в документации"
+        )
 
 
 @app.post("/detailed-explain")
