@@ -1420,43 +1420,68 @@ canvas {
     margin: 10px auto;
 }
 /* Стили для поиска в документации */
-.doc-search-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
 
 .doc-search-content {
-    background: white;
-    padding: 20px;
+    margin-top: 15px;
+    padding: 10px;
+    background: var(--explanation-background, #f9f9f9);
     border-radius: 8px;
-    max-width: 80%;
-    max-height: 80vh;
-    overflow-y: auto;
-    text-align: left;
+    border-left: 4px solid var(--explanation-border, #007bff);
+}
+
+.doc-search-content h4 {
+    margin: 0 0 10px 0;
+    color: var(--text-color);
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.doc-context {
+    margin-bottom: 10px;
+}
+
+.doc-sentences {
+    list-style-type: disc;
+    padding-left: 20px;
+    margin: 0;
+}
+
+.doc-sentences li {
+    margin-bottom: 8px;
+    line-height: 1.6;
+    color: var(--text-color);
+    font-size: 14px;
 }
 
 .doc-search-content .text-match {
-    background-color: yellow;
-    font-weight: bold;
-    text-align: left;
-    display: block;
-    width: 100%;
-    padding: 2px 4px;
-    margin: 2px 0;
+    background-color: #ffeb3b;
+    padding: 1px 3px;
+    border-radius: 3px;
+    display: inline;
 }
 
-.doc-search-loading {
-    color: #666;
+.search-message {
+    color: var(--secondary-text-color);
     font-style: italic;
-    margin: 10px 0;
+    margin-top: 8px;
+    font-size: 14px;
+}
+
+.dark-theme .doc-search-content {
+    background: var(--explanation-background, #2a2a2a);
+    border-left-color: var(--explanation-border, #66b0ff);
+}
+
+.dark-theme .doc-sentences li {
+    color: var(--text-color);
+}
+
+.dark-theme .text-match {
+    background-color: #ffd700;
+}
+
+.dark-theme .search-message {
+    color: var(--secondary-text-color);
 }
 
 /* Стили для кнопок "Пояснить" и "Показать в документации" */

@@ -379,13 +379,18 @@ async function checkStatus() {
             button.addEventListener('click', async function() {
                 const requirement = this.getAttribute('data-requirement');
                 const card = this.closest('.error-item');
-
-                // Создаем индикатор загрузки
+        
+                // Удаляем предыдущий результат поиска, если он есть
+                const existingDocContent = card.querySelector('.doc-search-content');
+                if (existingDocContent) {
+                    existingDocContent.remove();
+                }
+        
                 const loader = document.createElement('div');
                 loader.className = 'doc-search-loading';
                 loader.textContent = 'Ищем в документации...';
                 card.appendChild(loader);
-
+        
                 try {
                     const response = await fetch('/find-in-document', {
                         method: 'POST',
@@ -396,32 +401,32 @@ async function checkStatus() {
                         })
                     });
                     const data = await response.json();
-
+        
                     if (!data.found) {
-                        alert('Текст не найден в документации');
+                        const docContentDiv = document.createElement('div');
+                        docContentDiv.className = 'doc-search-content';
+                        docContentDiv.innerHTML = `
+                            <h4>Найдено в документации:</h4>
+                            <p>${data.message || 'Текст не найден в документации'}</p>
+                        `;
+                        card.appendChild(docContentDiv);
                         return;
                     }
-
-                    // Создаем модальное окно с результатами
-                    const modal = document.createElement('div');
-                    modal.className = 'doc-search-modal';
-                    modal.innerHTML = `
-                        <div class="doc-search-content">
-                            <h3>Найдено в документации</h3>
-                            <div class="doc-context">
-                                ${highlightMatches(data.results[0].content, data.matches)}
-                            </div>
-                            <button class="close-doc-search">Закрыть</button>
+        
+                    const docContentDiv = document.createElement('div');
+                    docContentDiv.className = 'doc-search-content';
+                    docContentDiv.innerHTML = `
+                        <h4>Найдено в документации:</h4>
+                        <div class="doc-context">
+                            <ul class="doc-sentences">
+                                ${data.results[0].content.map(sentence => `
+                                    <li>${highlightMatches(sentence, data.results[0].positions)}</li>
+                                `).join('')}
+                            </ul>
+                            ${data.results[0].message ? `<p class="search-message">${data.results[0].message}</p>` : ''}
                         </div>
                     `;
-                    document.body.appendChild(modal);
-
-                    // Обработчики закрытия
-                    modal.querySelector('.close-doc-search').addEventListener('click', () => modal.remove());
-                    modal.addEventListener('click', (e) => {
-                        if (e.target === modal) modal.remove();
-                    });
-
+                    card.appendChild(docContentDiv);
                 } catch (error) {
                     alert('Ошибка поиска');
                     console.error(error);
@@ -431,19 +436,22 @@ async function checkStatus() {
             });
         });
 
+
+        // Функция подсветки совпадений
+        
         // Функция подсветки совпадений
         function highlightMatches(text, matches) {
             if (!matches || matches.length === 0) return text;
-
+        
             let result = '';
             let lastPos = 0;
-
+        
             matches.forEach(([start, end]) => {
                 result += text.slice(lastPos, start);
                 result += `<span class="text-match">${text.slice(start, end)}</span>`;
                 lastPos = end;
             });
-
+        
             result += text.slice(lastPos);
             return result;
         }

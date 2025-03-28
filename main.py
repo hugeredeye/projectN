@@ -435,12 +435,14 @@ async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(g
 
         if exact_matches:
             context = get_match_context(full_text, exact_matches[0])
+            cleaned_context = clean_text(context)
+            sentences = split_into_sentences(cleaned_context)
             return {
                 "status": "success",
                 "found": True,
                 "match_type": "exact",
                 "results": [{
-                    "content": context,
+                    "content": sentences,  # Возвращаем список предложений
                     "positions": [[m.start(), m.end()] for m in exact_matches]
                 }]
             }
@@ -452,7 +454,9 @@ async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(g
 
             for sentence in re.split(r'(?<=[.!?])\s+', full_text):
                 if any(keyword in sentence for keyword in keywords):
-                    found_sentences.append(sentence[:500])  # Ограничиваем длину
+                    cleaned_sentence = clean_text(sentence[:500])
+                    if cleaned_sentence:
+                        found_sentences.append(cleaned_sentence)
 
             if found_sentences:
                 return {
@@ -460,7 +464,7 @@ async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(g
                     "found": True,
                     "match_type": "keywords",
                     "results": [{
-                        "content": " [...] ".join(found_sentences[:3]),
+                        "content": found_sentences,  # Возвращаем список предложений
                         "message": "Найдено по ключевым словам из анализа"
                     }]
                 }
@@ -482,6 +486,19 @@ def get_match_context(text: str, match: re.Match, window: int = 100) -> str:
     start = max(0, match.start() - window)
     end = min(len(text), match.end() + window)
     return text[start:end]
+
+def clean_text(text: str) -> str:
+    """Очищает текст от лишних символов и форматирует ссылки"""
+    # Удаляем или заменяем ссылки вида [...].21 4
+    text = re.sub(r'\[\.\.\.\]\.\d+\s+\d+\.\d+', '', text)
+    # Удаляем лишние пробелы
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+def split_into_sentences(text: str) -> List[str]:
+    """Разбивает текст на предложения"""
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    return [s.strip() for s in sentences if s.strip()]
 
 
 def extract_keywords(text: str) -> List[str]:
