@@ -197,10 +197,11 @@ h1 {
 /* Карточка с результатами */
 .result-card {
     position: relative;
-    padding: 20px;
+    padding: 40px;
     background: var(--card-background);
     border-radius: 24px;
     box-shadow: 0 4px 20px var(--shadow-color);
+    text-align: center;
     max-width: 800px;
     margin: 20px auto;
 }
@@ -339,15 +340,23 @@ h1 {
 /* Кнопки скачивания и просмотра ошибок */
 .download-button,
 .view-errors-button {
-    background-color: var(--button-background); /* Светло-розовый фон */
-    color: white; /* Белый текст */
+    width: 100%;
+    padding: 16px;
+    margin-bottom: 16px;
     border: none;
     border-radius: 16px;
-    padding: 16px 24px;
+    background-color: var(--button-background);
+    color: white;
     font-size: 16px;
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.2s, transform 0.2s;
+    text-align: center;
+}
+
+.download-button:last-of-type,
+.view-errors-button:last-of-type {
+    margin-bottom: 30px;
 }
 
 .download-button:hover,
@@ -361,8 +370,19 @@ h1 {
     transform: translateY(0);
 }
 
-.download-button {
-    margin-bottom: 20px;
+/* Контейнер для кнопок */
+.action-buttons-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.action-buttons-container .button {
+    text-align: center;
+    width: 100%;
 }
 
 /* Контейнер отчета */
