@@ -7,7 +7,8 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Backgroun
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict
+from collections import Counter
+from typing import Dict, List
 from config import settings
 from rag_pipeline import generate_analysis, explain_point, generate_detailed_explanation
 from database import get_db, UploadedFile, ComparisonSession, db_manager, AsyncSessionLocal, create_tables, engine
@@ -384,9 +385,7 @@ async def explain_requirement(request: Dict[str, str], db: AsyncSession = Depend
 
 @app.post("/find-in-document")
 async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(get_db)):
-    """Поиск требования в документации с использованием FAISS"""
-    from langchain_huggingface import HuggingFaceEmbeddings
-    from langchain_community.vectorstores import FAISS
+    """Строгий поиск с проверкой через анализ карточки"""
     try:
         requirement = request.get("requirement")
         session_id = request.get("session_id")
@@ -394,112 +393,102 @@ async def find_in_document(request: Dict[str, str], db: AsyncSession = Depends(g
         if not requirement or not session_id:
             raise HTTPException(status_code=400, detail="Не указано требование или ID сессии")
 
-        # Получаем сессию сравнения
+        # Получаем сессию и анализ из карточки
         session = await db.execute(
             select(ComparisonSession)
             .where(ComparisonSession.session_id == session_id)
         )
         session = session.scalar_one_or_none()
 
-        if not session:
-            raise HTTPException(status_code=404, detail="Сессия не найдена")
+        if not session or not session.result:
+            raise HTTPException(status_code=404, detail="Сессия или результаты анализа не найдены")
 
-        # Проверяем существование векторного хранилища
-        doc_faiss_path = os.path.join(settings.VECTOR_DB_PATH, "doc_faiss")
-        if not os.path.exists(doc_faiss_path):
-            logger.error(f"Векторное хранилище не найдено по пути: {doc_faiss_path}")
-            raise HTTPException(
-                status_code=404,
-                detail="Векторное хранилище документации не найдено. Пожалуйста, выполните сравнение документов сначала."
-            )
+        # Находим соответствующий пункт в анализе
+        card_analysis = next(
+            (item for item in session.result
+             if item["requirement"].lower() == requirement.lower()),
+            None
+        )
 
-        # Проверяем наличие необходимых файлов FAISS
-        required_files = ["index.faiss", "index.pkl"]
-        for file in required_files:
-            if not os.path.exists(os.path.join(doc_faiss_path, file)):
-                logger.error(f"Файл {file} отсутствует в {doc_faiss_path}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Файл {file} векторного хранилища не найден"
-                )
+        if not card_analysis:
+            return {
+                "status": "success",
+                "found": False,
+                "message": "Требование не найдено в анализе"
+            }
 
-        # Загружаем эмбеддинги и векторное хранилище
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        # Если в карточке указано, что требование отсутствует
+        if card_analysis["status"]["status"] == "не соответствует ТЗ":
+            return {
+                "status": "success",
+                "found": False,
+                "message": card_analysis.get("analysis", "Требование отсутствует в документации")
+            }
 
-        try:
-            doc_vectorstore = FAISS.load_local(doc_faiss_path, embeddings, allow_dangerous_deserialization=True)
-        except Exception as e:
-            logger.error(f"Ошибка загрузки векторного хранилища: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail="Не удалось загрузить векторное хранилище документации"
-            )
+        # Загружаем оригинальный текст документации
+        doc_file = await db.get(UploadedFile, session.doc_file_id)
+        doc_content = await read_file_content(doc_file.id, db)
+        full_text = doc_content['raw_text'].lower()
 
-        # Ищем наиболее релевантные фрагменты с ограничением длины
-        try:
-            docs = doc_vectorstore.similarity_search(requirement, k=3)
+        # 1. Строгий поиск точного совпадения
+        exact_matches = list(re.finditer(re.escape(requirement.lower()), full_text))
 
-            if not docs:
-                return {
-                    "status": "success",
-                    "found": False,
-                    "message": "Требование не найдено в документации"
-                }
-
-            # Ограничиваем длину возвращаемого текста
-            MAX_LENGTH = 2000
-            processed_results = []
-            for doc in docs:
-                content = doc.page_content
-                if len(content) > MAX_LENGTH:
-                    # Находим позицию требования в тексте
-                    match = re.search(re.escape(requirement), content, re.IGNORECASE)
-                    start_pos = match.start() if match else 0
-                    # Берем фрагмент вокруг требования
-                    start = max(0, start_pos - MAX_LENGTH // 2)
-                    end = min(len(content), start_pos + len(requirement) + MAX_LENGTH // 2)
-                    content = content[start:end]
-                    if start > 0:
-                        content = "..." + content
-                    if end < len(doc.page_content):
-                        content = content + "..."
-
-                processed_results.append({
-                    "content": content,
-                    "source": doc.metadata.get("source", "unknown"),
-                    "chunk_id": doc.metadata.get("chunk_id", 0),
-                    "full_length": len(doc.page_content)
-                })
-
-            # Находим точные совпадения для подсветки
-            first_result_content = processed_results[0]["content"]
-            matches = []
-            for m in re.finditer(re.escape(requirement), first_result_content, re.IGNORECASE):
-                matches.append([m.start(), m.end()])
-
+        if exact_matches:
+            context = get_match_context(full_text, exact_matches[0])
             return {
                 "status": "success",
                 "found": True,
-                "results": processed_results,
-                "matches": matches,
-                "vector_db_path": doc_faiss_path  # для отладки
+                "match_type": "exact",
+                "results": [{
+                    "content": context,
+                    "positions": [[m.start(), m.end()] for m in exact_matches]
+                }]
             }
 
-        except Exception as e:
-            logger.error(f"Ошибка поиска в векторной БД: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail="Ошибка при поиске в документации"
-            )
+        # 2. Поиск по ключевым словам из анализа
+        if "analysis" in card_analysis:
+            keywords = extract_keywords(card_analysis["analysis"])
+            found_sentences = []
 
-    except HTTPException:
-        raise
+            for sentence in re.split(r'(?<=[.!?])\s+', full_text):
+                if any(keyword in sentence for keyword in keywords):
+                    found_sentences.append(sentence[:500])  # Ограничиваем длину
+
+            if found_sentences:
+                return {
+                    "status": "success",
+                    "found": True,
+                    "match_type": "keywords",
+                    "results": [{
+                        "content": " [...] ".join(found_sentences[:3]),
+                        "message": "Найдено по ключевым словам из анализа"
+                    }]
+                }
+
+        # 3. Если ничего не найдено
+        return {
+            "status": "success",
+            "found": False,
+            "message": card_analysis.get("analysis", "Требование не найдено в документации")
+        }
+
     except Exception as e:
-        logger.error(f"Неожиданная ошибка поиска в документации: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="Внутренняя ошибка сервера при поиске в документации"
-        )
+        logger.error(f"Ошибка поиска: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def get_match_context(text: str, match: re.Match, window: int = 100) -> str:
+    """Возвращает контекст вокруг совпадения"""
+    start = max(0, match.start() - window)
+    end = min(len(text), match.end() + window)
+    return text[start:end]
+
+
+def extract_keywords(text: str) -> List[str]:
+    """Извлекает ключевые слова из анализа"""
+    words = re.findall(r'\w{4,}', text.lower())  # Слова от 4 символов
+    freq = Counter(words)
+    return [word for word, count in freq.most_common(5)]  # Топ-5 частых слов
 
 
 @app.post("/detailed-explain")
