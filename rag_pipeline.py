@@ -10,6 +10,7 @@ from config import settings
 import shutil
 import re
 import time
+from datetime import datetime
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -338,32 +339,49 @@ class RAGPipeline:
     def _calculate_compliance_metrics(self, analysis_results: List[Dict], doc_vectorstore: FAISS) -> Dict:
         """Вычисление метрик соответствия"""
         total_requirements = len(analysis_results)
-        matched_requirements = 0
+        total_weight = 0
+        weighted_score = 0
         detailed_results = []
 
         for item in analysis_results:
             requirement = item["requirement"]
             status = item["status"]["status"]
+            criticality = item["status"]["criticality"]
+
+            # Определяем вес требования в зависимости от критичности
+            weight = 1.0
+            if criticality == "критическое":
+                weight = 2.0
+            elif criticality == "важное":
+                weight = 1.5
+            total_weight += weight
 
             # Анализируем соответствие
             match_info = self._analyze_requirement_match(requirement, doc_vectorstore)
+            match_percent = match_info["match_percent"]
 
-            # Считаем статистику
+            # Корректируем процент в зависимости от статуса
             if status == "соответствует ТЗ":
-                matched_requirements += 1
-            elif match_info["match_percent"] > 50:
-                matched_requirements += 0.5
+                match_percent = 100
+            elif status == "частично соответствует ТЗ":
+                match_percent = min(match_percent, 75)
+            else:
+                match_percent = min(match_percent, 25)
+
+            # Добавляем к общему счету с учетом веса
+            weighted_score += match_percent * weight
 
             detailed_results.append({
                 "requirement": requirement,
-                "match_percent": match_info["match_percent"],
+                "match_percent": match_percent,
                 "match_details": match_info["details"],
                 "original_status": item["status"],
-                "original_analysis": item.get("analysis", "")
+                "original_analysis": item.get("analysis", ""),
+                "weight": weight
             })
 
-        # Общий процент соответствия
-        total_compliance = round((matched_requirements / total_requirements) * 100) if total_requirements else 0
+        # Общий процент соответствия с учетом весов
+        total_compliance = round((weighted_score / total_weight)) if total_weight else 0
 
         return {
             "total_compliance": total_compliance,
@@ -397,10 +415,33 @@ class RAGPipeline:
                     "details": "Требование не найдено"
                 }
 
-            match_percent = round((len(common_words) / len(req_words)) * 100)
+            # Улучшенный расчет процента соответствия
+            word_match_percent = len(common_words) / len(req_words)
+            
+            # Проверка порядка слов
+            req_sequence = requirement.lower().split()
+            doc_sequence = doc_text.lower().split()
+            sequence_match = 0
+            
+            for i in range(len(doc_sequence) - len(req_sequence) + 1):
+                if doc_sequence[i:i+len(req_sequence)] == req_sequence:
+                    sequence_match = 1
+                    break
+
+            # Комбинируем метрики
+            final_percent = round((word_match_percent * 0.7 + sequence_match * 0.3) * 100)
+            
+            details = []
+            if sequence_match:
+                details.append("Найдено полное соответствие последовательности слов")
+            if word_match_percent > 0.5:
+                details.append(f"Частичное совпадение по {len(common_words)} ключевым словам")
+            else:
+                details.append("Минимальное совпадение по ключевым словам")
+
             return {
-                "match_percent": match_percent,
-                "details": f"Частичное совпадение по {len(common_words)} ключевым словам"
+                "match_percent": final_percent,
+                "details": " | ".join(details)
             }
 
         except Exception as e:
@@ -414,10 +455,12 @@ class RAGPipeline:
         """Генерация текстового заключения"""
         if percent >= 90:
             return "Отличное соответствие требованиям"
-        elif percent >= 70:
+        elif percent >= 75:
             return "Хорошее соответствие с незначительными отклонениями"
         elif percent >= 50:
             return "Удовлетворительное соответствие с замечаниями"
+        elif percent >= 25:
+            return "Неудовлетворительное соответствие с критическими замечаниями"
         else:
             return "Критическое несоответствие требованиям"
 

@@ -183,20 +183,37 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <p>${data.conclusion}</p>
                                 </div>
                                 <div class="extended-list">
-                                    ${data.extended_report.map(item => `
-                                        <div class="extended-item">
-                                            <h3>${item.Требование}</h3>
-                                            <div class="compliance-meter">
-                                                <div class="meter-bar" style="width: ${item.Соответствие.replace('%', '')}%"></div>
-                                                <span class="meter-text">${item.Соответствие}</span>
+                                    ${data.extended_report.map(item => {
+                                        const percent = parseInt(item.Соответствие);
+                                        let meterClass = 'meter-bar';
+                                        if (percent >= 75) {
+                                            meterClass += ' success';
+                                        } else if (percent >= 50) {
+                                            meterClass += ' warning';
+                                        } else {
+                                            meterClass += ' error';
+                                        }
+                                        
+                                        return `
+                                            <div class="extended-item">
+                                                <h3>${item.Требование}</h3>
+                                                <div class="compliance-info">
+                                                    <div class="compliance-meter">
+                                                        <div class="${meterClass}" style="width: ${percent}%"></div>
+                                                    </div>
+                                                    <div class="compliance-value">${percent}%</div>
+                                                </div>
+                                                <div class="compliance-details">
+                                                    <p><strong>Статус:</strong> ${item.Статус}</p>
+                                                    <p><strong>Детали соответствия:</strong> ${item.Детали}</p>
+                                                    <p><strong>Критичность:</strong> ${item.Критичность || 'Не указана'}</p>
+                                                </div>
+                                                <button class="explain-button" data-requirement="${item.Требование}">
+                                                    Детальный анализ
+                                                </button>
                                             </div>
-                                            <p><strong>Статус:</strong> ${item.Статус}</p>
-                                            <p><strong>Детали:</strong> ${item.Детали}</p>
-                                            <button class="explain-button" data-requirement="${item.Требование}">
-                                                Детальный анализ
-                                            </button>
-                                        </div>
-                                    `).join('')}
+                                        `;
+                                    }).join('')}
                                 </div>
                             ` : '<p>Нет данных для отображения</p>'}
                         </div>
