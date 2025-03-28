@@ -150,8 +150,7 @@ h1 {
 .compare-button {
     display: none;
     padding: 12px 24px;
-    background-color: white;
-    color: var(--button-background); /* #F5C6D6 в светлой теме */
+    background-color: var(--button-background);
     color: white;
     border: none;
     border-radius: 4px;
@@ -169,9 +168,9 @@ h1 {
 
 .compare-button:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    background-color: #f0e6f0; /* Светло-розовый фон */
-    color: #C94D6B; /* Темно-розовый текст для контраста */
+    box-shadow: 0 4px 8px var(--shadow-color);
+    background-color: var(--button-hover);
+    color: white;
 }
 
 .view-file-button {
@@ -465,6 +464,13 @@ h1 {
 }
 
 /* Статусы */
+.status {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    text-align: left;
+}
+
 .status.success {
     color: var(--match-color);
     background-color: var(--status-success-bg);
@@ -485,8 +491,8 @@ h1 {
     top: 20px;
     right: 20px;
     padding: 10px 20px;
-    background-color: var(--theme-toggle-bg); /* white в светлой теме */
-    color: var(--theme-toggle-text); /* #F5C6D6 в светлой теме */
+    background-color: var(--theme-toggle-bg);
+    color: var(--theme-toggle-text);
     border: none;
     border-radius: 16px;
     cursor: pointer;
@@ -495,13 +501,13 @@ h1 {
 }
 
 .theme-toggle:hover {
-    background-color: #f0e6f0; /* Светло-розовый фон */
-    color: #C94D6B; /* Темно-розовый текст */
+    background-color: var(--button-hover);
+    color: white; /* Сохраняем белый цвет текста при наведении */
 }
 
 .dark-theme .theme-toggle:hover {
-    background-color: #555555;          /* Светлее серый фон при наведении в темной теме */
-    color: white;                       /* Белый текст сохраняется */
+    background-color: var(--button-hover);
+    color: white; /* Сохраняем белый цвет текста при наведении в темной теме */
 }
 
 /* Адаптивность */
@@ -1055,6 +1061,193 @@ h1 {
     to { opacity: 1; transform: translateX(0); }
 }
 
+/* PDF Viewer */
+.pdf-viewer {
+    width: 100%;
+    height: 70vh;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+canvas {
+    max-width: 100%;
+    border: 1px solid #ddd;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+/* Темная тема */
+.dark-theme .pdf-viewer,
+.dark-theme canvas {
+    border-color: #444;
+    background: #2a2a2a;
+}
+
+.error {
+    color: #f44336;
+    padding: 20px;
+    text-align: center;
+}
+/* PDF Embed */
+.pdf-embed {
+    width: 100%;
+    height: 70vh;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* Контейнер для PDF.js (если решите использовать) */
+.pdf-viewer-container {
+    width: 100%;
+    height: 70vh;
+    overflow: auto;
+}
+
+/* Общие стили модалки */
+.file-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.file-modal-content {
+    background: white;
+    width: 80%;
+    max-width: 900px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.dark-theme .file-modal-content {
+    background: #2d2d2d;
+}
+/* Карта документа */
+.doc-map-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.doc-map-container {
+  background: white;
+  width: 80%;
+  height: 80vh;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  grid-template-rows: auto 1fr auto;
+  gap: 15px;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.doc-map-navigation {
+  grid-row: span 2;
+  overflow-y: auto;
+  border-right: 1px solid #eee;
+}
+
+.doc-map-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+
+.doc-map-item:hover {
+  background: #f5f5f5;
+  border-left-color: #4CAF50;
+}
+
+.doc-map-preview {
+  overflow-y: auto;
+}
+
+.highlight {
+  background: #FFF9C4;
+  padding: 2px 0;
+}
+
+/* Темная тема */
+.dark-theme .doc-map-container {
+  background: #2d2d2d;
+  color: white;
+}
+
+.dark-theme .doc-map-navigation {
+  border-right-color: #444;
+}
+
+.dark-theme .doc-map-item:hover {
+  background: #333;
+}
+
+.dark-theme .highlight {
+  background: #5E35B1;
+  color: white;
+}
+/* Стили для Markdown-контента */
+.markdown-content {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    line-height: 1.6;
+    color: #333;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+    color: #2c3e50;
+    margin: 15px 0 10px;
+}
+
+.markdown-content pre {
+    background: #f5f5f5;
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.markdown-content code {
+    background: #f5f5f5;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+}
+
+.markdown-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 15px 0;
+}
+
+.markdown-content table,
+.markdown-content th,
+.markdown-content td {
+    border: 1px solid #ddd;
+}
+
+/* Темная тема */
+.dark-theme .markdown-content {
+    color: #e0e0e0;
+}
+
+.dark-theme .markdown-content pre,
+.dark-theme .markdown-content code {
+    background: #2a2a2a;
+    color: #f8f8f8;
+}
+
 /* Увеличиваем расстояние между блоками статусов */
 .error-item,
 .result-section,
@@ -1206,6 +1399,7 @@ h1 {
     animation: spin 1s linear infinite;
     margin: 10px auto;
 }
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
